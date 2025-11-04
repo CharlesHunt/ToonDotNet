@@ -7,6 +7,8 @@ Token-Oriented Object Notation (TOON) — a compact, human-readable serializatio
 - Strongly-typed decode support via System.Text.Json
 - Strict validation options and round-trip helpers
 
+![TOON logo with step‑by‑step guide](./og.png)
+
 ## Installation
 
 Install from NuGet:
@@ -89,16 +91,16 @@ See `examples/ToonFormat.Example` for a runnable console sample.
 
 ## Versioning
 
-This project follows semantic versioning. See `CHANGELOG.md` for release notes.
+This project follows semantic versioning. See [`CHANGELOG.md`](./CHANGELOG.md) for release notes.
 
 ## Contributing
 
-Contributions are welcome. See `CONTRIBUTING.md` and `CODE_OF_CONDUCT.md`.
+Contributions are welcome. See [`CONTRIBUTING.md`](./CONTRIBUTING.md) and [`CODE_OF_CONDUCT.md`](./CODE_OF_CONDUCT.md).
 
 ## Security
 
-Please see `SECURITY.md` for reporting vulnerabilities.
+Please see [`SECURITY.md`](./SECURITY.md) for reporting vulnerabilities.
 
 ## License
 
-MIT License — see `LICENSE`.
+MIT License — see [`LICENSE`](./LICENSE).
