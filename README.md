@@ -1,4 +1,4 @@
-![TOON logo with step‑by‑step guide](./.github/og.png)
+![TOON logo with step‑by‑step guide](./og.png)
 
 # Token-Oriented Object Notation (TOON)
 
