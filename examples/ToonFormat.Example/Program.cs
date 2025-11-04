@@ -62,6 +62,8 @@ var options = new EncodeOptions
 string customToon = Toon.Encode(userData, options);
 Console.WriteLine(customToon);
 
+Console.ReadKey();
+
 public class User
 {
     public int Id { get; set; }
