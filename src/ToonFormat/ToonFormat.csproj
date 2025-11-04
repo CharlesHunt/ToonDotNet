@@ -7,27 +7,34 @@
     <LangVersion>latest</LangVersion>
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
     
     <!-- Package information -->
     <PackageId>ToonFormat</PackageId>
     <Title>ToonFormat</Title>
     <Version>1.0.0</Version>
-    <Description>Token-Oriented Object Notation (TOON) - a token-efficient JSON alternative for LLM prompts</Description>
+    <Description>Token-Oriented Object Notation (TOON) for .NET — a compact, human-readable, token-efficient format optimized for LLM prompts and structured data.</Description>
     <Authors>ToonFormat Contributors</Authors>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
-    <PackageProjectUrl>https://toonformat.dev</PackageProjectUrl>
-    <RepositoryUrl>https://github.com/toon-format/toon-dotnet</RepositoryUrl>
+    <PackageProjectUrl>https://github.com/CharlesHunt/ToonDotNet</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/CharlesHunt/ToonDotNet</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
-    <PackageTags>toon;format;llm;token-efficiency;data-format;serialization</PackageTags>
+    <PackageTags>TOON;format;LLM;prompt;token-efficiency;data-format;serialization;tokenization;json-alternative</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageReleaseNotes>See CHANGELOG.md for full release notes.</PackageReleaseNotes>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="System.Text.Json" Version="9.0.10" />
+    <PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.0.0" PrivateAssets="All" />
   </ItemGroup>
 
   <ItemGroup>
     <None Include="../../README.md" Pack="true" PackagePath="\" />
+    <None Include="../../CHANGELOG.md" Pack="true" PackagePath="\" Condition="Exists('..\\..\\CHANGELOG.md')" />
+    <None Include="../../LICENSE" Pack="true" PackagePath="\" Condition="Exists('..\\..\\LICENSE')" />
   </ItemGroup>
 
 </Project>

@@ -1,91 +1,104 @@
-# This is an unofficial port of the toon format (https://github.com/toon-format/toon) to dotnet 9.0
-
-![TOON logo with step‑by‑step guide](./og.png)
-
-# Token-Oriented Object Notation (TOON)
-
-[![CI](https://github.com/toon-format/toon/actions/workflows/ci.yml/badge.svg)](https://github.com/toon-format/toon/actions)
-[![npm version](https://img.shields.io/npm/v/@toon-format/toon.svg)](https://www.npmjs.com/package/@toon-format/toon)
-[![SPEC v1.3](https://img.shields.io/badge/spec-v1.3-lightgray)](https://github.com/toon-format/spec)
-[![npm downloads (total)](https://img.shields.io/npm/dt/@toon-format/toon.svg)](https://www.npmjs.com/package/@toon-format/toon)
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
-
-**Token-Oriented Object Notation** is a compact, human-readable serialization format designed for passing structured data to Large Language Models with significantly reduced token usage. It's intended for LLM input, not output.
-
-TOON's sweet spot is **uniform arrays of objects** – multiple fields per row, same structure across items. It borrows YAML's indentation-based structure for nested objects and CSV's tabular format for uniform data rows, then optimizes both for token efficiency in LLM contexts. For deeply nested or non-uniform data, JSON may be more efficient.
-
-> [!TIP]
-> Think of TOON as a translation layer: use JSON programmatically, convert to TOON for LLM input.
-
-
 # ToonFormat for .NET
 
-A .NET implementation of the TOON (Token-Oriented Object Notation) format - a compact, human-readable serialization format designed for passing structured data to Large Language Models with significantly reduced token usage.
+Token-Oriented Object Notation (TOON) — a compact, human-readable serialization format designed for passing structured data to Large Language Models with significantly reduced token usage. TOON shines for uniform arrays of objects and readable nested structures.
 
-## Features
-
-- **Token Efficient**: Significantly reduces token usage compared to JSON for LLM prompts
-- **Human Readable**: Easy to read and write manually 
-- **Tabular Format**: Optimized for uniform arrays of objects
-- **Strong Types**: Full .NET type support with JsonElement integration
-- **Validation**: Strict parsing with comprehensive error reporting
+- Token-efficient alternative to JSON for LLM prompts
+- Human-friendly and diff-friendly
+- Strongly-typed decode support via System.Text.Json
+- Strict validation options and round-trip helpers
 
 ## Installation
 
-```bash
+Install from NuGet:
+
+```
 dotnet add package ToonFormat
 ```
 
-## Quick Start
+Target Framework: net9.0
+
+## Quick start
 
 ```csharp
 using ToonFormat;
 
-// Encoding objects to TOON format
-var data = new { 
-    users = new[] { 
-        new { id = 1, name = "Alice", role = "admin" },
-        new { id = 2, name = "Bob", role = "user" }
-    }
+var data = new {
+ users = new[] {
+ new { id =1, name = "Alice", role = "admin" },
+ new { id =2, name = "Bob", role = "user" }
+ }
 };
 
-string toonString = Toon.Encode(data);
-Console.WriteLine(toonString);
-// Output:
+// Encode to TOON
+string toon = Toon.Encode(data);
 // users[2]{id,name,role}:
-//   1,Alice,admin  
-//   2,Bob,user
+//1,Alice,admin
+//2,Bob,user
 
-// Decoding TOON format back to objects
-var decoded = Toon.Decode<dynamic>(toonString);
+// Decode to JsonElement
+var json = Toon.Decode(toon);
+
+// Decode to a typed model
+var users = Toon.Decode<UserData>(toon);
+
+public class UserData { public User[] Users { get; set; } = Array.Empty<User>(); }
+public class User { public int Id { get; set; } public string Name { get; set; } = ""; public string Role { get; set; } = ""; }
 ```
 
-## API Reference
+## API overview
 
-### Main Methods
+- `Toon.Encode(object value, EncodeOptions? options = null)`
+- `Toon.Decode(string input, DecodeOptions? options = null)` → `JsonElement`
+- `Toon.Decode<T>(string input, DecodeOptions? options = null, JsonSerializerOptions? jsonOptions = null)`
+- `Toon.IsValid(string input, DecodeOptions? options = null)`
+- `Toon.RoundTrip(object value, EncodeOptions? encodeOptions = null, DecodeOptions? decodeOptions = null)`
 
-- `Toon.Encode(object, EncodeOptions?)` - Encode object to TOON string
-- `Toon.Decode(string, DecodeOptions?)` - Decode TOON string to JsonElement  
-- `Toon.Decode<T>(string, DecodeOptions?, JsonSerializerOptions?)` - Decode to strongly-typed object
-- `Toon.IsValid(string, DecodeOptions?)` - Validate TOON format syntax
-- `Toon.RoundTrip(object, EncodeOptions?, DecodeOptions?)` - Test encoding/decoding fidelity
+### Options
 
-### Configuration Options
+`EncodeOptions`
+- `Indent` — spaces per level (default:2)
+- `Delimiter` — value delimiter for rows/inline arrays (default: ',')
+- `LengthMarker` — optional array length marker (e.g. '#')
 
-**EncodeOptions:**
-- `Indent` - Spaces per indentation level (default: 2)  
-- `Delimiter` - Character for separating values (default: ',')
-- `LengthMarker` - Optional '#' prefix for array lengths
+`DecodeOptions`
+- `Indent` — expected spaces per level (default:2)
+- `Strict` — validate lengths/row counts and forbid stray blank lines
 
-**DecodeOptions:**
-- `Indent` - Spaces per indentation level (default: 2)
-- `Strict` - Enforce validation of lengths and structure (default: true)
+### Customization example
+
+```csharp
+var opts = new EncodeOptions {
+ Indent =4,
+ Delimiter = '|',
+ LengthMarker = '#'
+};
+var toon = Toon.Encode(data, opts);
+```
+
+## When to use TOON
+
+- Uniform arrays of objects (tabular data)
+- Human-readable prompt payloads for LLMs
+- Compact, copy/paste friendly format with stable structure
+
+For deeply nested, highly irregular data, plain JSON may be more compact.
+
+## Samples
+
+See `examples/ToonFormat.Example` for a runnable console sample.
+
+## Versioning
+
+This project follows semantic versioning. See `CHANGELOG.md` for release notes.
+
+## Contributing
+
+Contributions are welcome. See `CONTRIBUTING.md` and `CODE_OF_CONDUCT.md`.
+
+## Security
+
+Please see `SECURITY.md` for reporting vulnerabilities.
 
 ## License
 
-MIT License - see LICENSE file for details.
-
-## Links
-
-- [TOON Specification](https://github.com/toon-format/spec)
-- [TypeScript Implementation](https://github.com/toon-format/toon)
+MIT License — see `LICENSE`.
