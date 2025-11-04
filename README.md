@@ -1,3 +1,21 @@
+![TOON logo with step‑by‑step guide](./.github/og.png)
+
+# Token-Oriented Object Notation (TOON)
+
+[![CI](https://github.com/toon-format/toon/actions/workflows/ci.yml/badge.svg)](https://github.com/toon-format/toon/actions)
+[![npm version](https://img.shields.io/npm/v/@toon-format/toon.svg)](https://www.npmjs.com/package/@toon-format/toon)
+[![SPEC v1.3](https://img.shields.io/badge/spec-v1.3-lightgray)](https://github.com/toon-format/spec)
+[![npm downloads (total)](https://img.shields.io/npm/dt/@toon-format/toon.svg)](https://www.npmjs.com/package/@toon-format/toon)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
+
+**Token-Oriented Object Notation** is a compact, human-readable serialization format designed for passing structured data to Large Language Models with significantly reduced token usage. It's intended for LLM input, not output.
+
+TOON's sweet spot is **uniform arrays of objects** – multiple fields per row, same structure across items. It borrows YAML's indentation-based structure for nested objects and CSV's tabular format for uniform data rows, then optimizes both for token efficiency in LLM contexts. For deeply nested or non-uniform data, JSON may be more efficient.
+
+> [!TIP]
+> Think of TOON as a translation layer: use JSON programmatically, convert to TOON for LLM input.
+
+
 # ToonFormat for .NET
 
 A .NET implementation of the TOON (Token-Oriented Object Notation) format - a compact, human-readable serialization format designed for passing structured data to Large Language Models with significantly reduced token usage.
