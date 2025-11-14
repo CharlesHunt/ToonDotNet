@@ -17,7 +17,7 @@ Install from NuGet:
 dotnet add package ToonFormat
 ```
 
-Target Framework: net10.0
+Target Frameworks: net9.0, net10.0
 
 ## Quick start
 
