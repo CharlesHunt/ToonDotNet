@@ -12,3 +12,10 @@ The format is based on Keep a Changelog and this project adheres to Semantic Ver
 - Validation and round-trip helpers
 - Examples project and basic README
 
+## [1.1.0] -2025-11-14
+### Added
+- Bumpred project to framework NET10
+
+## [1.2.0] -2025-11-14
+### Added
+- Made the project multi framework, with .NET8.0, .NET9.0 and NET10.0
