@@ -1,5 +1,7 @@
 # ToonFormat for .NET
 
+[![.NET 8.0](https://img.shields.io/badge/.NET-8.0-blue.svg)![.NET 9.0](https://img.shields.io/badge/.NET-9.0-blue.svg)![.NET 10.0](https://img.shields.io/badge/.NET-10.0-blue.svg)](https://dotnet.microsoft.com/download)[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+
 Token-Oriented Object Notation (TOON) — a compact, human-readable serialization format designed for passing structured data to Large Language Models with significantly reduced token usage. TOON shines for uniform arrays of objects and readable nested structures.
 
 - Token-efficient alternative to JSON for LLM prompts
