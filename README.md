@@ -16,7 +16,7 @@ Token-Oriented Object Notation (TOON) — a compact, human-readable serializatio
 Install from NuGet:
 
 ```
-dotnet add package ToonFormat
+dotnet add package Toon.DotNet
 ```
 
 Target Frameworks: net8.0, net9.0, net10.0
