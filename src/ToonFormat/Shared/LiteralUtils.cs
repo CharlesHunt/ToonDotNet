@@ -21,7 +21,11 @@ internal static class LiteralUtils
         string trimmed = token.Trim();
 
         // Handle quoted strings - but validate they are properly quoted
+#if NETSTANDARD2_0
+        if (trimmed.StartsWith(Constants.DoubleQuote.ToString()))
+#else
         if (trimmed.StartsWith(Constants.DoubleQuote))
+#endif
         {
             // Validate the string is properly terminated
             int closingQuote = StringUtils.FindClosingQuote(trimmed, 0);

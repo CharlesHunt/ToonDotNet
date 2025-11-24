@@ -79,27 +79,47 @@ internal class ParsedLine
     /// <summary>
     /// The raw line content.
     /// </summary>
+#if NETSTANDARD2_0
+    public string Raw { get; set; }
+#else
     public required string Raw { get; set; }
+#endif
 
     /// <summary>
     /// The indentation depth of the line.
     /// </summary>
+#if NETSTANDARD2_0
+    public int Depth { get; set; }
+#else
     public required int Depth { get; set; }
+#endif
 
     /// <summary>
     /// The number of spaces of indentation.
     /// </summary>
+#if NETSTANDARD2_0
+    public int Indent { get; set; }
+#else
     public required int Indent { get; set; }
+#endif
 
     /// <summary>
     /// The content of the line after removing indentation.
     /// </summary>
+#if NETSTANDARD2_0
+    public string Content { get; set; }
+#else
     public required string Content { get; set; }
+#endif
 
     /// <summary>
     /// The line number (1-based).
     /// </summary>
+#if NETSTANDARD2_0
+    public int LineNumber { get; set; }
+#else
     public required int LineNumber { get; set; }
+#endif
 }
 
 /// <summary>
@@ -110,17 +130,29 @@ internal class BlankLineInfo
     /// <summary>
     /// The line number (1-based).
     /// </summary>
+#if NETSTANDARD2_0
+    public int LineNumber { get; set; }
+#else
     public required int LineNumber { get; set; }
+#endif
 
     /// <summary>
     /// The number of spaces of indentation.
     /// </summary>
+#if NETSTANDARD2_0
+    public int Indent { get; set; }
+#else
     public required int Indent { get; set; }
+#endif
 
     /// <summary>
     /// The indentation depth.
     /// </summary>
+#if NETSTANDARD2_0
+    public int Depth { get; set; }
+#else
     public required int Depth { get; set; }
+#endif
 }
 
 /// <summary>
@@ -131,7 +163,11 @@ internal class ArrayHeaderParseResult
     /// <summary>
     /// The parsed header information.
     /// </summary>
+#if NETSTANDARD2_0
+    public ArrayHeaderInfo Header { get; set; }
+#else
     public required ArrayHeaderInfo Header { get; set; }
+#endif
 
     /// <summary>
     /// Inline values parsed from the header line (if any).
@@ -149,7 +185,12 @@ public static class JsonElementExtensions
     /// </summary>
     public static bool IsPrimitive(this JsonElement element)
     {
-        return element.ValueKind is JsonValueKind.String or JsonValueKind.Number or JsonValueKind.True or JsonValueKind.False or JsonValueKind.Null;
+#if NETSTANDARD2_0
+    var vk = element.ValueKind;
+    return vk == JsonValueKind.String || vk == JsonValueKind.Number || vk == JsonValueKind.True || vk == JsonValueKind.False || vk == JsonValueKind.Null;
+#else
+    return element.ValueKind is JsonValueKind.String or JsonValueKind.Number or JsonValueKind.True or JsonValueKind.False or JsonValueKind.Null;
+#endif
     }
 
     /// <summary>
@@ -157,6 +198,29 @@ public static class JsonElementExtensions
     /// </summary>
     public static object? GetValue(this JsonElement element)
     {
+#if NETSTANDARD2_0
+        switch (element.ValueKind)
+        {
+            case JsonValueKind.String:
+                return element.GetString();
+            case JsonValueKind.Number:
+                if (element.TryGetInt32(out var intValue))
+                    return intValue;
+                return element.GetDouble();
+            case JsonValueKind.True:
+                return true;
+            case JsonValueKind.False:
+                return false;
+            case JsonValueKind.Null:
+                return null;
+            case JsonValueKind.Object:
+                return element;
+            case JsonValueKind.Array:
+                return element;
+            default:
+                throw new InvalidOperationException($"Unsupported JsonValueKind: {element.ValueKind}");
+        }
+#else
         return element.ValueKind switch
         {
             JsonValueKind.String => element.GetString(),
@@ -168,5 +232,6 @@ public static class JsonElementExtensions
             JsonValueKind.Array => element,
             _ => throw new InvalidOperationException($"Unsupported JsonValueKind: {element.ValueKind}")
         };
+#endif
     }
 }

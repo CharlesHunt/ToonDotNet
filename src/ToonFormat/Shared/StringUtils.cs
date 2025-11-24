@@ -92,11 +92,21 @@ internal static class StringUtils
     /// <returns>The unescaped string.</returns>
     public static string UnescapeString(string quotedValue)
     {
-        if (quotedValue.Length < 2 || quotedValue[0] != Constants.DoubleQuote || quotedValue[^1] != Constants.DoubleQuote)
-            return quotedValue;
+    if (quotedValue.Length < 2 || quotedValue[0] != Constants.DoubleQuote ||
+#if NETSTANDARD2_0
+        quotedValue[quotedValue.Length - 1] != Constants.DoubleQuote)
+        return quotedValue;
+#else
+        quotedValue[^1] != Constants.DoubleQuote)
+        return quotedValue;
+#endif
 
-        var sb = new StringBuilder();
-        string content = quotedValue[1..^1]; // Remove surrounding quotes
+    var sb = new StringBuilder();
+#if NETSTANDARD2_0
+    string content = quotedValue.Substring(1, quotedValue.Length - 2); // Remove surrounding quotes
+#else
+    string content = quotedValue[1..^1]; // Remove surrounding quotes
+#endif
 
         for (int i = 0; i < content.Length; i++)
         {
@@ -177,6 +187,11 @@ internal static class StringUtils
     /// </summary>
     public static bool IsQuoted(string value)
     {
-        return value.Length >= 2 && value[0] == Constants.DoubleQuote && value[^1] == Constants.DoubleQuote;
+    if (value.Length < 2) return false;
+#if NETSTANDARD2_0
+    return value[0] == Constants.DoubleQuote && value[value.Length - 1] == Constants.DoubleQuote;
+#else
+    return value[0] == Constants.DoubleQuote && value[^1] == Constants.DoubleQuote;
+#endif
     }
 }

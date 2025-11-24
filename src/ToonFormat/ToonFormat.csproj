@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFrameworks>net8.0;net9.0;net10.0</TargetFrameworks>
+    <TargetFrameworks>net8.0;net9.0;net10.0;netstandard2.0</TargetFrameworks>
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
@@ -14,7 +14,7 @@
     <!-- Package information -->
     <PackageId>Toon.DotNet</PackageId>
     <Title>ToonFormat for DotNet</Title>
-    <Version>1.3.0</Version>
+    <Version>1.4.0</Version>
     <Description>Token-Oriented Object Notation (TOON) for .NET — a compact, human-readable, token-efficient format optimized for LLM prompts and structured data.</Description>
     <Authors>Charles Hunt</Authors>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
@@ -44,6 +44,7 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.0.0" PrivateAssets="All" />
+    <PackageReference Include="System.Text.Json" Version="10.0.0" />
   </ItemGroup>
 
   <ItemGroup>

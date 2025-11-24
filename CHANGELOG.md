@@ -23,3 +23,7 @@ The format is based on Keep a Changelog and this project adheres to Semantic Ver
 ## [1.3.0] -2025-11-20
 ### Added
 -- Added SizeComparisonPercentage function to compare TOON and JSON sizes. If TOON is smaller, returns the size reduction percentage; e.g. a value of 75 means TOON is 25% smaller than JSON or that the TOON size is 75% of the JSON equivalent.
+
+## [1.4.0] -2025-11-25
+### Added
+-- Added compatibility for NetStandard2.0 so that the library can be used in older projects that target .NET Framework 4.6.1 and above.

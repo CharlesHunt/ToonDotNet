@@ -67,7 +67,11 @@ internal static class ToonDecoder
         string content = line.Content;
         
         // Look for unquoted colon or quoted key followed by colon
+#if NETSTANDARD2_0
+        if (content.StartsWith(Constants.DoubleQuote.ToString()))
+#else
         if (content.StartsWith(Constants.DoubleQuote))
+#endif
         {
             // Quoted key - find the closing quote
             int closingQuoteIndex = StringUtils.FindClosingQuote(content, 0);
@@ -75,7 +79,11 @@ internal static class ToonDecoder
                 return false;
             
             // Check if colon exists after quoted key (may have array/brace syntax between)
+#if NETSTANDARD2_0
+            return content.Substring(closingQuoteIndex + 1).Contains(Constants.Colon.ToString());
+#else
             return content[(closingQuoteIndex + 1)..].Contains(Constants.Colon);
+#endif
         }
         else
         {
@@ -147,7 +155,12 @@ internal static class ToonDecoder
 
         // Parse regular key-value
         var keyResult = ToonParser.ParseKeyToken(content, 0);
-        string valueContent = content[keyResult.End..].Trim();
+    string valueContent;
+#if NETSTANDARD2_0
+    valueContent = content.Substring(keyResult.End).Trim();
+#else
+    valueContent = content[keyResult.End..].Trim();
+#endif
 
         JsonElement parsedValue;
         int followDepth = baseDepth;
@@ -279,7 +292,11 @@ internal static class ToonDecoder
             if (line.Content.StartsWith(Constants.ListItemPrefix))
             {
                 cursor.Advance();
+#if NETSTANDARD2_0
+                string itemContent = line.Content.Substring(Constants.ListItemPrefix.Length);
+#else
                 string itemContent = line.Content[Constants.ListItemPrefix.Length..];
+#endif
                 
                 // Check for nested object or array
                 if (ToonParser.IsArrayHeaderAfterHyphen(itemContent))

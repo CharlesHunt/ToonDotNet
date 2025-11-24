@@ -23,14 +23,23 @@ internal static class ToonParser
         int bracketStart = -1;
 
         // For quoted keys, find bracket after closing quote (not inside the quoted string)
+#if NETSTANDARD2_0
+        if (trimmed.StartsWith(Constants.DoubleQuote.ToString()))
+#else
         if (trimmed.StartsWith(Constants.DoubleQuote))
+#endif
         {
             int closingQuoteIndex = StringUtils.FindClosingQuote(trimmed, 0);
             if (closingQuoteIndex == -1)
                 return null;
 
+#if NETSTANDARD2_0
+            string afterQuote = trimmed.Substring(closingQuoteIndex + 1);
+            if (!afterQuote.StartsWith(Constants.OpenBracket.ToString()))
+#else
             string afterQuote = trimmed[(closingQuoteIndex + 1)..];
             if (!afterQuote.StartsWith(Constants.OpenBracket))
+#endif
                 return null;
 
             // Calculate position in original content and find bracket after the quoted key
@@ -75,12 +84,22 @@ internal static class ToonParser
         string? key = null;
         if (bracketStart > 0)
         {
+#if NETSTANDARD2_0
+            string rawKey = content.Substring(0, bracketStart).Trim();
+            key = rawKey.StartsWith(Constants.DoubleQuote.ToString()) ? ParseStringLiteral(rawKey) : rawKey;
+#else
             string rawKey = content[..bracketStart].Trim();
             key = rawKey.StartsWith(Constants.DoubleQuote) ? ParseStringLiteral(rawKey) : rawKey;
+#endif
         }
 
-        string afterColon = content[(colonIndex + 1)..].Trim();
-        string bracketContent = content[(bracketStart + 1)..bracketEnd];
+#if NETSTANDARD2_0
+    string afterColon = content.Substring(colonIndex + 1).Trim();
+    string bracketContent = content.Substring(bracketStart + 1, bracketEnd - (bracketStart + 1));
+#else
+    string afterColon = content[(colonIndex + 1)..].Trim();
+    string bracketContent = content[(bracketStart + 1)..bracketEnd];
+#endif
 
         // Try to parse bracket segment
         BracketParseResult parsedBracket;
@@ -100,7 +119,11 @@ internal static class ToonParser
             int foundBraceEnd = content.IndexOf(Constants.CloseBrace, braceStart);
             if (foundBraceEnd != -1 && foundBraceEnd < colonIndex)
             {
+#if NETSTANDARD2_0
+                string fieldsContent = content.Substring(braceStart + 1, foundBraceEnd - (braceStart + 1));
+#else
                 string fieldsContent = content[(braceStart + 1)..foundBraceEnd];
+#endif
                 var fieldValues = ParseDelimitedValues(fieldsContent, parsedBracket.Delimiter);
                 fields = fieldValues.Select(field => ParseStringLiteral(field.Trim())).ToArray();
             }
@@ -134,9 +157,15 @@ internal static class ToonParser
     /// </summary>
     private class BracketParseResult
     {
-        public required int Length { get; set; }
-        public required char Delimiter { get; set; }
-        public required bool HasLengthMarker { get; set; }
+#if NETSTANDARD2_0
+    public int Length { get; set; }
+    public char Delimiter { get; set; }
+    public bool HasLengthMarker { get; set; }
+#else
+    public required int Length { get; set; }
+    public required char Delimiter { get; set; }
+    public required bool HasLengthMarker { get; set; }
+#endif
     }
 
     /// <summary>
@@ -148,23 +177,48 @@ internal static class ToonParser
         string content = seg;
 
         // Check for length marker
+#if NETSTANDARD2_0
+        if (content.StartsWith(Constants.Hash.ToString()))
+#else
         if (content.StartsWith(Constants.Hash))
+#endif
         {
             hasLengthMarker = true;
+            // Remove leading length marker char
+#if NETSTANDARD2_0
+            content = content.Substring(1);
+#else
             content = content[1..];
+#endif
         }
 
         // Check for delimiter suffix
         char delimiter = defaultDelimiter;
+#if NETSTANDARD2_0
+        if (content.EndsWith(Constants.Tab.ToString()))
+#else
         if (content.EndsWith(Constants.Tab))
+#endif
         {
             delimiter = Constants.Delimiters.Tab;
+#if NETSTANDARD2_0
+            content = content.Substring(0, content.Length - 1);
+#else
             content = content[..^1];
+#endif
         }
+#if NETSTANDARD2_0
+        else if (content.EndsWith(Constants.Pipe.ToString()))
+#else
         else if (content.EndsWith(Constants.Pipe))
+#endif
         {
             delimiter = Constants.Delimiters.Pipe;
+#if NETSTANDARD2_0
+            content = content.Substring(0, content.Length - 1);
+#else
             content = content[..^1];
+#endif
         }
 
         if (!int.TryParse(content, out int length))
@@ -247,7 +301,11 @@ internal static class ToonParser
     {
         string trimmed = token.Trim();
 
+#if NETSTANDARD2_0
+        if (trimmed.StartsWith(Constants.DoubleQuote.ToString()))
+#else
         if (trimmed.StartsWith(Constants.DoubleQuote))
+#endif
         {
             // Find the closing quote, accounting for escaped quotes
             int closingQuoteIndex = StringUtils.FindClosingQuote(trimmed, 0);
@@ -262,7 +320,11 @@ internal static class ToonParser
                 throw new InvalidOperationException("Unexpected characters after closing quote");
             }
 
+#if NETSTANDARD2_0
+            string content = trimmed.Substring(1, closingQuoteIndex - 1);
+#else
             string content = trimmed[1..closingQuoteIndex];
+#endif
             return StringUtils.UnescapeString($"\"{content}\"");
         }
 
@@ -289,8 +351,13 @@ internal static class ToonParser
     /// </summary>
     public class KeyParseResult
     {
-        public required string Key { get; set; }
-        public required int End { get; set; }
+#if NETSTANDARD2_0
+    public string Key { get; set; }
+    public int End { get; set; }
+#else
+    public required string Key { get; set; }
+    public required int End { get; set; }
+#endif
     }
 
     /// <summary>
@@ -310,7 +377,11 @@ internal static class ToonParser
             throw new InvalidOperationException("Missing colon after key");
         }
 
-        string key = content[start..end].Trim();
+#if NETSTANDARD2_0
+    string key = content.Substring(start, end - start).Trim();
+#else
+    string key = content[start..end].Trim();
+#endif
 
         // Skip the colon
         end++;
@@ -332,7 +403,11 @@ internal static class ToonParser
         }
 
         // Extract and unescape the key content
-        string keyContent = content[(start + 1)..closingQuoteIndex];
+#if NETSTANDARD2_0
+    string keyContent = content.Substring(start + 1, closingQuoteIndex - (start + 1));
+#else
+    string keyContent = content[(start + 1)..closingQuoteIndex];
+#endif
         string key = StringUtils.UnescapeString($"\"{keyContent}\"");
         int end = closingQuoteIndex + 1;
 
@@ -351,7 +426,11 @@ internal static class ToonParser
     /// </summary>
     public static bool IsArrayHeaderAfterHyphen(string content)
     {
+#if NETSTANDARD2_0
+        return content.Trim().StartsWith(Constants.OpenBracket.ToString()) && FindUnquotedChar(content, Constants.Colon) != -1;
+#else
         return content.Trim().StartsWith(Constants.OpenBracket) && FindUnquotedChar(content, Constants.Colon) != -1;
+#endif
     }
 
     /// <summary>

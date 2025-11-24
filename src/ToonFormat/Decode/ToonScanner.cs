@@ -8,12 +8,20 @@ internal class ScanResult
     /// <summary>
     /// Parsed lines with content.
     /// </summary>
+#if NETSTANDARD2_0
+    public ParsedLine[] Lines { get; set; }
+#else
     public required ParsedLine[] Lines { get; set; }
+#endif
 
     /// <summary>
     /// Information about blank lines.
     /// </summary>
+#if NETSTANDARD2_0
+    public BlankLineInfo[] BlankLines { get; set; }
+#else
     public required BlankLineInfo[] BlankLines { get; set; }
+#endif
 }
 
 /// <summary>
@@ -150,7 +158,11 @@ internal static class ToonScanner
                 indent++;
             }
 
+#if NETSTANDARD2_0
+            string content = raw.Substring(indent);
+#else
             string content = raw[indent..];
+#endif
 
             // Track blank lines
             if (string.IsNullOrWhiteSpace(content))
@@ -178,7 +190,13 @@ internal static class ToonScanner
                 }
 
                 // Check for tabs in leading whitespace (before actual content)
-                if (raw[..wsEnd].Contains(Constants.Tab))
+                if (
+#if NETSTANDARD2_0
+                    raw.Substring(0, wsEnd).Contains(Constants.Tab)
+#else
+                    raw[..wsEnd].Contains(Constants.Tab)
+#endif
+                )
                 {
                     throw new InvalidOperationException($"Line {lineNumber}: Tabs are not allowed in indentation. Use spaces only.");
                 }
