@@ -144,4 +144,25 @@ public static class Toon
         string encoded = Encode(input, encodeOptions);
         return Decode(encoded, decodeOptions);
     }
+
+    /// <summary>
+    /// Compares the size of the TOON format string to the JSON string representation of the input object.
+    /// Returns the percentage reduction in size when using TOON format compared to JSON.
+    /// </summary>
+    /// <typeparam name="T">The type of the input object.</typeparam>
+    /// <param name="input">The object to compare.</param>
+    /// <param name="encodeOptions">Optional encoding options for TOON format.</param>
+    /// <returns>
+    /// The percentage reduction in size (rounded to two decimal places) of the TOON format string compared to the JSON string.
+    /// Returns 0 if the JSON string length is zero.
+    /// </returns>
+    public static decimal SizeComparisonPercentage<T>(T input, EncodeOptions? encodeOptions = null)
+    {
+        var jsonString = JsonSerializer.Serialize(input);
+        var toonString = Encode(input, encodeOptions);
+        if (jsonString.Length == 0)
+            return 0m;
+        decimal percentage = 100m - ((decimal)toonString.Length * 100m / (decimal)jsonString.Length);
+        return Math.Round(percentage, 2);
+    }
 }
