@@ -56,6 +56,7 @@ public class User { public int Id { get; set; } public string Name { get; set; }
 - `Toon.Decode<T>(string input, DecodeOptions? options = null, JsonSerializerOptions? jsonOptions = null)`
 - `Toon.IsValid(string input, DecodeOptions? options = null)`
 - `Toon.RoundTrip(object value, EncodeOptions? encodeOptions = null, DecodeOptions? decodeOptions = null)`
+- `Toon.SizeComparisonPercentage<T>(T input, EncodeOptions? encodeOptions = null)`
 
 ### Options
 
@@ -77,6 +78,33 @@ var opts = new EncodeOptions {
  LengthMarker = '#'
 };
 var toon = Toon.Encode(data, opts);
+```
+
+### Size comparison example
+
+```csharp
+// original data
+var data = new[] {
+ new { id =1, name = "Alice", role = "admin" },
+ new { id =2, name = "Bob", role = "user" },
+ new { id =3, name = "Charlie", role = "user" },
+ new { id =4, name = "Dana", role = "admin" },
+};
+
+// encode with custom options
+var encodeOptions = new EncodeOptions {  Indent = 2, Delimiter = '|' };
+var toon = Toon.Encode(data, encodeOptions);
+// => id|name|role
+//   -+----+------+
+//    1|Alice|admin |
+//    2| Bob | user |
+//    3|Charlie| user |
+//    4| Dana |admin |
+
+// get size comparison percentage
+var pct = Toon.SizeComparisonPercentage(data, encodeOptions);
+// ⇒ 28.57 (TOON is ~28.57% smaller than JSON for this data)
+
 ```
 
 ## When to use TOON
