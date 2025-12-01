@@ -125,6 +125,41 @@ public static class Toon
     }
 
     /// <summary>
+    /// Serializes the specified input object and saves it to a file in TOON format at the given path using the provided encoding
+    /// options.
+    /// </summary>
+    /// <param name="input">The object to serialize and save. If null, an empty representation will be written to the file.</param>
+    /// <param name="filePath">The path of the file to which the serialized data will be written. Cannot be null or empty.</param>
+    /// <param name="encodeOptions">Optional encoding options that control how the input object is serialized. If null, default encoding options are
+    /// used.</param>
+    public static void Save(object? input, string filePath, EncodeOptions? encodeOptions = null)
+    {
+        var toonString = Encode(input, encodeOptions);
+        System.IO.File.WriteAllText(filePath, toonString);
+    }
+
+    /// <summary>
+    /// Deserializes an object of type T from a TOON file at the specified path, using optional decoding and serializer
+    /// options.
+    /// </summary>
+    /// <remarks>This method reads the entire contents of the file at <paramref name="filePath"/> and attempts
+    /// to decode it into an object of type T. If the file does not exist or contains invalid TOON, an exception may be
+    /// thrown. The decoding and serializer options allow customization of the deserialization process.</remarks>
+    /// <typeparam name="T">The type of object to deserialize from the TOON file.</typeparam>
+    /// <param name="filePath">The path to the TOON file to load and deserialize. Cannot be null or empty.</param>
+    /// <param name="decodeOptions">Optional decoding options that influence how the TOON content is interpreted. If null, default decoding behavior
+    /// is used.</param>
+    /// <param name="jsonOptions">Optional serializer options that control JSON deserialization settings. If null, default serializer options are
+    /// applied.</param>
+    /// <returns>An instance of type T deserialized from the specified TON file.</returns>
+    public static T Load<T>(string filePath, DecodeOptions? decodeOptions = null, JsonSerializerOptions? jsonOptions = null)
+    {
+        var toonString = System.IO.File.ReadAllText(filePath);
+        var result = Decode<T>(toonString, decodeOptions, jsonOptions);
+        return result;
+    }
+
+    /// <summary>
     /// Performs a round-trip test: encodes an object to TOON format, then decodes it back.
     /// This is useful for testing data fidelity and format compatibility.
     /// </summary>

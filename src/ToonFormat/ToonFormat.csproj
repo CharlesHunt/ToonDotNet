@@ -14,7 +14,7 @@
     <!-- Package information -->
     <PackageId>Toon.DotNet</PackageId>
     <Title>ToonFormat for DotNet</Title>
-    <Version>1.4.0</Version>
+    <Version>1.5.0</Version>
     <Description>Token-Oriented Object Notation (TOON) for .NET — a compact, human-readable, token-efficient format optimized for LLM prompts and structured data.</Description>
     <Authors>Charles Hunt</Authors>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
@@ -24,6 +24,7 @@
     <PackageTags>TOON;format;LLM;prompt;token-efficiency;data-format;serialization;tokenization;json-alternative</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageReleaseNotes>See CHANGELOG.md for full release notes.</PackageReleaseNotes>
+    <PackageIcon>hrd.png</PackageIcon>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)|$(TargetFramework)|$(Platform)'=='Debug|net9.0|AnyCPU'">
@@ -51,6 +52,10 @@
     <None Include="../../README.md" Pack="true" PackagePath="\" />
     <None Include="../../CHANGELOG.md" Pack="true" PackagePath="\" Condition="Exists('..\\..\\CHANGELOG.md')" />
     <None Include="../../LICENSE" Pack="true" PackagePath="\" Condition="Exists('..\\..\\LICENSE')" />
+    <None Include="..\..\hrd.png">
+      <Pack>True</Pack>
+      <PackagePath>\</PackagePath>
+    </None>
   </ItemGroup>
 
 </Project>
