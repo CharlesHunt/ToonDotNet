@@ -91,7 +91,7 @@ public class FileOperationTests : IDisposable
         var invalidPath = Path.Combine(Path.GetTempPath(), new string(Path.GetInvalidPathChars()[0], 1), "test.toon");
 
         // Act & Assert
-        Assert.Throws<ArgumentException>(() => Toon.Save(testData, invalidPath));
+        Assert.Throws<System.IO.IOException>(() => Toon.Save(testData, invalidPath));
     }
 
     [Fact]

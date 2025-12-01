@@ -56,6 +56,8 @@ public class User { public int Id { get; set; } public string Name { get; set; }
 - `Toon.Decode<T>(string input, DecodeOptions? options = null, JsonSerializerOptions? jsonOptions = null)`
 - `Toon.IsValid(string input, DecodeOptions? options = null)`
 - `Toon.RoundTrip(object value, EncodeOptions? encodeOptions = null, DecodeOptions? decodeOptions = null)`
+- `Toon.Save(object? value, string filePath, EncodeOptions? options = null)`
+- `Toon.Load<T>(string filePath, DecodeOptions? options = null, JsonSerializerOptions? jsonOptions = null)`
 - `Toon.SizeComparisonPercentage<T>(T input, EncodeOptions? encodeOptions = null)`
 
 ### Options

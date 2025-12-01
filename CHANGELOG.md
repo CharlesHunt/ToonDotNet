@@ -27,3 +27,7 @@ The format is based on Keep a Changelog and this project adheres to Semantic Ver
 ## [1.4.0] -2025-11-25
 ### Added
 -- Added compatibility for NetStandard2.0 so that the library can be used in older projects that target .NET Framework 4.6.1 and above.
+
+## [1.5.0] -2025-11-25
+### Added
+-- Added basic file operations to read TOON data from files and write TOON data to files.
