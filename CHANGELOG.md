@@ -31,3 +31,7 @@ The format is based on Keep a Changelog and this project adheres to Semantic Ver
 ## [1.5.0] -2025-12-01
 ### Added
 -- Added basic file operations to read TOON data from files and write TOON data to files.
+
+## [1.5.1] -2025-12-02
+### Added
+-- Added Load operation that returns JsonElement.

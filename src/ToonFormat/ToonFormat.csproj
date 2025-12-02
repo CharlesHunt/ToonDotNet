@@ -14,7 +14,7 @@
     <!-- Package information -->
     <PackageId>Toon.DotNet</PackageId>
     <Title>ToonFormat for DotNet</Title>
-    <Version>1.5.0</Version>
+    <Version>1.5.1</Version>
     <Description>Token-Oriented Object Notation (TOON) for .NET — a compact, human-readable, token-efficient format optimized for LLM prompts and structured data.</Description>
     <Authors>Charles Hunt</Authors>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
