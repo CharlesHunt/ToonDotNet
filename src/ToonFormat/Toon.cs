@@ -57,7 +57,7 @@ public static class Toon
         }
 
         var resolvedOptions = options ?? new DecodeOptions();
-        return ToonDecoder.DecodeValue(input, resolvedOptions);
+        return ToonDecoder.DecodeValue(input, resolvedOptions);        
     }
 
     /// <summary>
@@ -136,6 +136,20 @@ public static class Toon
     {
         var toonString = Encode(input, encodeOptions);
         System.IO.File.WriteAllText(filePath, toonString);
+    }
+
+    /// <summary>
+    /// Loads and decodes a JSON element from the specified file using optional decoding options.
+    /// </summary>
+    /// <param name="filePath">The path to the file containing the JSON data to load. Cannot be null or empty.</param>
+    /// <param name="decodeOptions">Optional decoding options that influence how the JSON data is interpreted. If null, default decoding behavior is
+    /// used.</param>
+    /// <returns>A <see cref="JsonElement"/> representing the decoded JSON data from the file.</returns>
+    public static JsonElement Load(string filePath, DecodeOptions? decodeOptions = null)
+    {
+        var toonString = System.IO.File.ReadAllText(filePath);
+        var result = Decode(toonString, decodeOptions);
+        return result;
     }
 
     /// <summary>
