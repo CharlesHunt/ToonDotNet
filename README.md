@@ -1,13 +1,6 @@
 # Toon Serializer for .NET
 
-[
-![.NET 10.0](https://img.shields.io/badge/.NET-10.0-blue.svg)
-![.NET 9.0](https://img.shields.io/badge/.NET-9.0-blue.svg)
-![.NET 8.0](https://img.shields.io/badge/.NET-8.0-blue.svg)
-](https://dotnet.microsoft.com/download)
-[
-![NetStandard2.0](https://img.shields.io/badge/NetStandard2.0-blue.svg)
-](https://docs.microsoft.com/en-us/dotnet/standard/net-standard)
+[![.NET 10.0](https://img.shields.io/badge/.NET-10.0-blue.svg)![.NET 9.0](https://img.shields.io/badge/.NET-9.0-blue.svg)![.NET 8.0](https://img.shields.io/badge/.NET-8.0-blue.svg)](https://dotnet.microsoft.com/download)[![NetStandard2.0](https://img.shields.io/badge/NetStandard2.0-blue.svg)](https://docs.microsoft.com/en-us/dotnet/standard/net-standard)
 
 Token-Oriented Object Notation (TOON) Serializer — a compact, human-readable serialization format designed for passing structured data to Large Language Models with significantly reduced token usage. TOON shines for uniform arrays of objects and readable nested structures. Optimised for .Net 10.0 plus backwards compatible with earlier versions. 
 
@@ -18,6 +11,7 @@ Token-Oriented Object Notation (TOON) Serializer — a compact, human-readable s
 
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
+## How it works
 ![TOON logo with step‑by‑step guide](./og.png)
 
 ## Installation
