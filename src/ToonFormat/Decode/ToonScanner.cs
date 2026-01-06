@@ -134,7 +134,7 @@ internal static class ToonScanner
     /// <returns>Scan result with parsed lines and blank line information.</returns>
     public static ScanResult ToParsedLines(string source, int indentSize, bool strict)
     {
-        if (string.IsNullOrWhiteSpace(source))
+        if (string.IsNullOrWhiteSpace(source) && !source.Contains("\n"))
         {
             return new ScanResult 
             { 

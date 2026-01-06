@@ -1,9 +1,10 @@
 # Toon Serializer for .NET
 
 [![NuGet Downloads](https://img.shields.io/nuget/dt/Toon.DotNet.svg?label=Downloads&color=green)](https://www.nuget.org/packages/Toon.DotNet)
-[![Tests](https://img.shields.io/badge/tests-passing-brightgreen.svg)](https://github.com/CharlesHunt/ToonDotNet/actions)
+
 [![.NET 10.0](https://img.shields.io/badge/.NET-10.0-blue.svg)![.NET 9.0](https://img.shields.io/badge/.NET-9.0-blue.svg)![.NET 8.0](https://img.shields.io/badge/.NET-8.0-blue.svg)](https://dotnet.microsoft.com/download)
 [![NetStandard2.0](https://img.shields.io/badge/NetStandard2.0-blue.svg)](https://docs.microsoft.com/en-us/dotnet/standard/net-standard)
+[![Tests](https://img.shields.io/badge/tests-passing-brightgreen.svg)](https://github.com/CharlesHunt/ToonDotNet/actions)
 ---
 Token-Oriented Object Notation (TOON) Serializer — a compact, human-readable serialization format designed for passing structured data to Large Language Models with significantly reduced token usage. TOON shines for uniform arrays of objects and readable nested structures. Optimised for .Net 10.0 plus backwards compatible with earlier versions. 
 
@@ -14,8 +15,7 @@ Token-Oriented Object Notation (TOON) Serializer — a compact, human-readable s
 - Direct JSON-to-TOON and TOON-to-JSON conversion methods for seamless interoperability.
 - File operations for reading and writing TOON and JSON data.
 - Examples included. 
-- Unit tests with high code coverage. 
-- 90 unit tests 100% passing.
+- 288 Unit tests with > 95% coverage. 100% passing.
 
 ---
 **Targets:** 

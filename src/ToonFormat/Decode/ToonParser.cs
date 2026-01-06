@@ -124,7 +124,8 @@ internal static class ToonParser
 #else
                 string fieldsContent = content[(braceStart + 1)..foundBraceEnd];
 #endif
-                var fieldValues = ParseDelimitedValues(fieldsContent, parsedBracket.Delimiter);
+                // Fields are always comma-delimited, regardless of the data delimiter
+                var fieldValues = ParseDelimitedValues(fieldsContent, Constants.Comma);
                 fields = fieldValues.Select(field => ParseStringLiteral(field.Trim())).ToArray();
             }
         }

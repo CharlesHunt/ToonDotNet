@@ -53,7 +53,7 @@ public class ToonFromJsonTests
         string toon = Toon.FromJson(json, options);
 
         // Assert
-        Assert.Contains("[#2]", toon);
+        Assert.Contains("[#2|]", toon);
         Assert.Contains("|", toon);
     }
 
@@ -241,7 +241,7 @@ public class ToonFromJsonTests
             string toon = Toon.FromJsonFile(tempFile, options);
 
             // Assert
-            Assert.Contains("[#2]", toon);
+            Assert.Contains("[#2|]", toon);
         }
         finally
         {

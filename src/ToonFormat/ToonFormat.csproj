@@ -27,6 +27,12 @@
     <PackageIcon>hrd.png</PackageIcon>
   </PropertyGroup>
 
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
+      <_Parameter1>ToonFormat.Tests</_Parameter1>
+    </AssemblyAttribute>
+  </ItemGroup>
+
   <PropertyGroup Condition="'$(Configuration)|$(TargetFramework)|$(Platform)'=='Debug|net9.0|AnyCPU'">
     <WarningLevel>8</WarningLevel>
   </PropertyGroup>

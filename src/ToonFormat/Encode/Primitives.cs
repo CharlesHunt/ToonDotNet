@@ -49,21 +49,23 @@ internal static class Primitives
             parts.Add(EncodeKey(key));
         }
 
-        // Format length with optional marker
+        // Format length with optional marker and delimiter suffix
         string lengthPart = lengthMarker.HasValue ? $"{lengthMarker}{length}" : length.ToString();
-        parts.Add($"[{lengthPart}]");
+        
+        // Add delimiter suffix if not default
+        string delimiterSuffix = "";
+        if (delimiter != Constants.DefaultDelimiter)
+        {
+            delimiterSuffix = delimiter.ToString();
+        }
+        
+        parts.Add($"[{lengthPart}{delimiterSuffix}]");
 
         // Add fields if present
         if (fields != null && fields.Length > 0)
         {
             string fieldList = string.Join(",", fields.Select(EncodeKey));
             parts.Add($"{{{fieldList}}}");
-        }
-
-        // Add delimiter info if not default
-        if (delimiter != Constants.DefaultDelimiter)
-        {
-            parts.Add($"({delimiter})");
         }
 
         return string.Join("", parts) + ":";

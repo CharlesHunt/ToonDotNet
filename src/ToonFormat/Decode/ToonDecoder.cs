@@ -301,7 +301,8 @@ internal static class ToonDecoder
                 // Check for nested object or array
                 if (ToonParser.IsArrayHeaderAfterHyphen(itemContent))
                 {
-                    var nestedHeader = ToonParser.ParseArrayHeaderLine(itemContent, Constants.DefaultDelimiter);
+                    // Use the parent array's delimiter as the default for nested arrays
+                    var nestedHeader = ToonParser.ParseArrayHeaderLine(itemContent, header.Delimiter);
                     if (nestedHeader != null)
                     {
                         var nestedArray = DecodeArrayFromHeader(nestedHeader.Header, nestedHeader.InlineValues, cursor, expectedDepth, options);
