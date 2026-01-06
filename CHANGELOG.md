@@ -35,3 +35,7 @@ The format is based on Keep a Changelog and this project adheres to Semantic Ver
 ## [1.5.1] -2025-12-02
 ### Added
 -- Added Load operation that returns JsonElement.
+
+## [1.5.2] -2026-01-05
+### Changed
+-- Now uses System.Text.Json version 10.0.1.
