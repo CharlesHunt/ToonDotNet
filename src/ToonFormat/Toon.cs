@@ -214,4 +214,179 @@ public static class Toon
         decimal percentage = 100m - ((decimal)toonString.Length * 100m / (decimal)jsonString.Length);
         return Math.Round(percentage, 2);
     }
+
+    /// <summary>
+    /// Converts a JSON string directly to TOON format.
+    /// This is the most efficient method for JSON-to-TOON conversion as it avoids
+    /// intermediate object serialization.
+    /// </summary>
+    /// <param name="jsonString">A valid JSON string to convert to TOON format.</param>
+    /// <param name="options">Optional encoding options. If null, default options are used.</param>
+    /// <returns>A TOON format string representation of the JSON input.</returns>
+    /// <exception cref="ArgumentException">Thrown when jsonString is null or empty.</exception>
+    /// <exception cref="JsonException">Thrown when jsonString is not valid JSON.</exception>
+    /// <example>
+    /// <code>
+    /// string json = "{\"users\":[{\"id\":1,\"name\":\"Alice\",\"role\":\"admin\"},{\"id\":2,\"name\":\"Bob\",\"role\":\"user\"}]}";
+    /// string toonString = Toon.FromJson(json);
+    /// // Result: users[2]{id,name,role}:\n  1,Alice,admin\n  2,Bob,user
+    /// </code>
+    /// </example>
+    public static string FromJson(string jsonString, EncodeOptions? options = null)
+    {
+        if (string.IsNullOrEmpty(jsonString))
+        {
+            throw new ArgumentException("JSON string cannot be null or empty", nameof(jsonString));
+        }
+
+        JsonElement jsonElement;
+        try
+        {
+            jsonElement = JsonDocument.Parse(jsonString).RootElement;
+        }
+        catch (JsonException ex)
+        {
+            throw new JsonException($"Invalid JSON string: {ex.Message}", ex);
+        }
+
+        var resolvedOptions = options ?? new EncodeOptions();
+        return ToonEncoder.EncodeValue(jsonElement, resolvedOptions);
+    }
+
+    /// <summary>
+    /// Converts a JSON file directly to TOON format.
+    /// This method reads a JSON file and converts it to TOON format efficiently.
+    /// </summary>
+    /// <param name="jsonFilePath">The path to the JSON file to convert.</param>
+    /// <param name="options">Optional encoding options. If null, default options are used.</param>
+    /// <returns>A TOON format string representation of the JSON file contents.</returns>
+    /// <exception cref="ArgumentException">Thrown when jsonFilePath is null or empty.</exception>
+    /// <exception cref="FileNotFoundException">Thrown when the specified file does not exist.</exception>
+    /// <exception cref="JsonException">Thrown when the file does not contain valid JSON.</exception>
+    /// <example>
+    /// <code>
+    /// string toonString = Toon.FromJsonFile("data.json");
+    /// // Converts the JSON file to TOON format
+    /// </code>
+    /// </example>
+    public static string FromJsonFile(string jsonFilePath, EncodeOptions? options = null)
+    {
+        if (string.IsNullOrEmpty(jsonFilePath))
+        {
+            throw new ArgumentException("File path cannot be null or empty", nameof(jsonFilePath));
+        }
+
+        if (!System.IO.File.Exists(jsonFilePath))
+        {
+            throw new System.IO.FileNotFoundException($"JSON file not found: {jsonFilePath}", jsonFilePath);
+        }
+
+        string jsonString = System.IO.File.ReadAllText(jsonFilePath);
+        return FromJson(jsonString, options);
+    }
+
+    /// <summary>
+    /// Converts a TOON format string directly to JSON.
+    /// This is the most efficient method for TOON-to-JSON conversion as it produces
+    /// compact JSON output from the decoded TOON data.
+    /// </summary>
+    /// <param name="toonString">A valid TOON format string to convert to JSON.</param>
+    /// <param name="decodeOptions">Optional decoding options. If null, default options are used.</param>
+    /// <param name="jsonOptions">Optional JSON serialization options. If null, compact JSON is produced.</param>
+    /// <returns>A JSON string representation of the TOON input.</returns>
+    /// <exception cref="ArgumentException">Thrown when toonString is null or empty.</exception>
+    /// <exception cref="InvalidOperationException">Thrown when toonString contains invalid TOON syntax.</exception>
+    /// <example>
+    /// <code>
+    /// string toon = "users[2]{id,name,role}:\n  1,Alice,admin\n  2,Bob,user";
+    /// string json = Toon.ToJson(toon);
+    /// // Result: {"users":[{"id":1,"name":"Alice","role":"admin"},{"id":2,"name":"Bob","role":"user"}]}
+    /// </code>
+    /// </example>
+    public static string ToJson(string toonString, DecodeOptions? decodeOptions = null, JsonSerializerOptions? jsonOptions = null)
+    {
+        if (string.IsNullOrEmpty(toonString))
+        {
+            throw new ArgumentException("TOON string cannot be null or empty", nameof(toonString));
+        }
+
+        var jsonElement = Decode(toonString, decodeOptions);
+        
+        var serializerOptions = jsonOptions ?? new JsonSerializerOptions
+        {
+            WriteIndented = false
+        };
+
+        return JsonSerializer.Serialize(jsonElement, serializerOptions);
+    }
+
+    /// <summary>
+    /// Converts a TOON format file directly to JSON.
+    /// This method reads a TOON file and converts it to JSON format efficiently.
+    /// </summary>
+    /// <param name="toonFilePath">The path to the TOON file to convert.</param>
+    /// <param name="decodeOptions">Optional decoding options. If null, default options are used.</param>
+    /// <param name="jsonOptions">Optional JSON serialization options. If null, compact JSON is produced.</param>
+    /// <returns>A JSON string representation of the TOON file contents.</returns>
+    /// <exception cref="ArgumentException">Thrown when toonFilePath is null or empty.</exception>
+    /// <exception cref="FileNotFoundException">Thrown when the specified file does not exist.</exception>
+    /// <exception cref="InvalidOperationException">Thrown when the file does not contain valid TOON syntax.</exception>
+    /// <example>
+    /// <code>
+    /// string json = Toon.ToJsonFile("data.toon");
+    /// // Converts the TOON file to JSON format
+    /// </code>
+    /// </example>
+    public static string ToJsonFile(string toonFilePath, DecodeOptions? decodeOptions = null, JsonSerializerOptions? jsonOptions = null)
+    {
+        if (string.IsNullOrEmpty(toonFilePath))
+        {
+            throw new ArgumentException("File path cannot be null or empty", nameof(toonFilePath));
+        }
+
+        if (!System.IO.File.Exists(toonFilePath))
+        {
+            throw new System.IO.FileNotFoundException($"TOON file not found: {toonFilePath}", toonFilePath);
+        }
+
+        string toonString = System.IO.File.ReadAllText(toonFilePath);
+        return ToJson(toonString, decodeOptions, jsonOptions);
+    }
+
+    /// <summary>
+    /// Converts a TOON format string to JSON and saves it to a file.
+    /// </summary>
+    /// <param name="toonString">A valid TOON format string to convert.</param>
+    /// <param name="jsonFilePath">The path where the JSON file will be saved.</param>
+    /// <param name="decodeOptions">Optional decoding options. If null, default options are used.</param>
+    /// <param name="jsonOptions">Optional JSON serialization options. If null, indented JSON is produced for readability.</param>
+    /// <exception cref="ArgumentException">Thrown when toonString or jsonFilePath is null or empty.</exception>
+    /// <exception cref="InvalidOperationException">Thrown when toonString contains invalid TOON syntax.</exception>
+    /// <example>
+    /// <code>
+    /// string toon = "users[2]{id,name,role}:\n  1,Alice,admin\n  2,Bob,user";
+    /// Toon.ToJsonFile(toon, "output.json");
+    /// // Creates output.json with formatted JSON
+    /// </code>
+    /// </example>
+    public static void SaveAsJson(string toonString, string jsonFilePath, DecodeOptions? decodeOptions = null, JsonSerializerOptions? jsonOptions = null)
+    {
+        if (string.IsNullOrEmpty(toonString))
+        {
+            throw new ArgumentException("TOON string cannot be null or empty", nameof(toonString));
+        }
+
+        if (string.IsNullOrEmpty(jsonFilePath))
+        {
+            throw new ArgumentException("File path cannot be null or empty", nameof(jsonFilePath));
+        }
+
+        var serializerOptions = jsonOptions ?? new JsonSerializerOptions
+        {
+            WriteIndented = true
+        };
+
+        string json = ToJson(toonString, decodeOptions, serializerOptions);
+        System.IO.File.WriteAllText(jsonFilePath, json);
+    }
 }

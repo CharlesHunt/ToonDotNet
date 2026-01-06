@@ -1,6 +1,9 @@
 # Toon Serializer for .NET
 
-[![.NET 10.0](https://img.shields.io/badge/.NET-10.0-blue.svg)![.NET 9.0](https://img.shields.io/badge/.NET-9.0-blue.svg)![.NET 8.0](https://img.shields.io/badge/.NET-8.0-blue.svg)](https://dotnet.microsoft.com/download)[![NetStandard2.0](https://img.shields.io/badge/NetStandard2.0-blue.svg)](https://docs.microsoft.com/en-us/dotnet/standard/net-standard)
+[![NuGet Downloads](https://img.shields.io/nuget/dt/Toon.DotNet.svg?label=Downloads&color=green)](https://www.nuget.org/packages/Toon.DotNet)
+[![Tests](https://img.shields.io/badge/tests-passing-brightgreen.svg)](https://github.com/CharlesHunt/ToonDotNet/actions)
+[![.NET 10.0](https://img.shields.io/badge/.NET-10.0-blue.svg)![.NET 9.0](https://img.shields.io/badge/.NET-9.0-blue.svg)![.NET 8.0](https://img.shields.io/badge/.NET-8.0-blue.svg)](https://dotnet.microsoft.com/download)
+[![NetStandard2.0](https://img.shields.io/badge/NetStandard2.0-blue.svg)](https://docs.microsoft.com/en-us/dotnet/standard/net-standard)
 ---
 Token-Oriented Object Notation (TOON) Serializer — a compact, human-readable serialization format designed for passing structured data to Large Language Models with significantly reduced token usage. TOON shines for uniform arrays of objects and readable nested structures. Optimised for .Net 10.0 plus backwards compatible with earlier versions. 
 
@@ -63,6 +66,12 @@ public class User { public int Id { get; set; } public string Name { get; set; }
 - `Toon.Encode(object value, EncodeOptions? options = null)`
 - `Toon.Decode(string input, DecodeOptions? options = null)` → `JsonElement`
 - `Toon.Decode<T>(string input, DecodeOptions? options = null, JsonSerializerOptions? jsonOptions = null)`
+#### Json Conversion methods
+- `Toon.FromJson(string jsonString, EncodeOptions? options = null)` - **Efficient JSON-to-TOON conversion**
+- `Toon.FromJsonFile(string jsonFilePath, EncodeOptions? options = null)` - **Convert JSON files to TOON**
+- `Toon.ToJson(string toonString, DecodeOptions? decodeOptions = null, JsonSerializerOptions? jsonOptions = null)` - **Efficient TOON-to-JSON conversion**
+- `Toon.ToJsonFile(string toonFilePath, DecodeOptions? decodeOptions = null, JsonSerializerOptions? jsonOptions = null)` - **Convert TOON files to JSON**
+- `Toon.SaveAsJson(string toonString, string jsonFilePath, DecodeOptions? decodeOptions = null, JsonSerializerOptions? jsonOptions = null)` - **Save TOON as JSON file**
 #### Validation and Utilities
 - `Toon.IsValid(string input, DecodeOptions? options = null)`
 - `Toon.RoundTrip(object value, EncodeOptions? encodeOptions = null, DecodeOptions? decodeOptions = null)`
@@ -71,6 +80,28 @@ public class User { public int Id { get; set; } public string Name { get; set; }
 - `Toon.Save(object? value, string filePath, EncodeOptions? options = null)`
 - `Toon.Load<T>(string filePath, DecodeOptions? options = null, JsonSerializerOptions? jsonOptions = null)`
 - `Toon.Load(string filePath, DecodeOptions? options = null)`
+
+---
+### JSON to TOON Conversion
+
+The most efficient way to convert JSON to TOON format:
+
+**Why use `FromJson`?**
+- **More efficient**: Parses JSON directly to TOON without intermediate object creation
+- **Memory efficient**: Single parse operation with minimal allocations
+- **Faster**: Bypasses object serialization/deserialization overhead
+- **Flexible**: Works with any valid JSON string or file
+
+---
+### TOON to JSON Conversion
+
+The most efficient way to convert TOON format back to JSON:
+
+**Why use `ToJson`?**
+- **Efficient**: Direct TOON decoding to JSON string
+- **Flexible output**: Control JSON formatting (compact or indented)
+- **Interoperability**: Easy integration with systems that require JSON
+- **Bidirectional**: Perfect complement to `FromJson` for round-trip conversions
 
 ---
 ### Options
