@@ -11,6 +11,8 @@ Token-Oriented Object Notation (TOON) Serializer — a compact, human-readable s
 - Human-friendly and diff-friendly
 - Strongly-typed decode support via System.Text.Json
 - Strict validation options and round-trip helpers
+- Direct JSON-to-TOON and TOON-to-JSON conversion methods for seamless interoperability.
+- File operations for reading and writing TOON and JSON data.
 
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 ---
