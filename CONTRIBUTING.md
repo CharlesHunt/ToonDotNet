@@ -2,7 +2,7 @@
 
 Thanks for your interest in contributing to ToonFormat for .NET!
 
-- Use .NET9 SDK.
+- Use .NET10 SDK.
 - Run tests before submitting changes.
 - Follow existing coding style and enable nullable.
 - Keep public APIs documented with XML comments.
