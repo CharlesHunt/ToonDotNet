@@ -15,7 +15,7 @@ Token-Oriented Object Notation (TOON) Serializer — a compact, human-readable s
 - Direct JSON-to-TOON and TOON-to-JSON conversion methods for seamless interoperability.
 - File operations for reading and writing TOON and JSON data.
 - Examples included. 
-- 292 Unit tests with > 95% coverage. 100% passing.
+- 342 Unit tests with > 95% coverage. 100% passing.
 
 ---
 **Targets:** 

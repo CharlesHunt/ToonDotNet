@@ -86,10 +86,17 @@ public class FileOperationTests : IDisposable
     {
         // Arrange
         var testData = new { name = "Alice" };
-        var invalidPath = Path.Combine(Path.GetTempPath(), new string(Path.GetInvalidPathChars()[0], 1), "test.toon");
-
+        
+        // Create a path that's invalid on all platforms:
+        // 1. Use a directory that doesn't exist (no permissions to create it)
+        // 2. Or use a path that's too long
+        // 3. Or use a null/empty path (but that's tested elsewhere)
+        
+        // Option 1: Non-existent directory that we can't create
+        var invalidPath = Path.Combine("/nonexistent_root_dir_that_should_never_exist_12345", "test.toon");
+        
         // Act & Assert
-        Assert.Throws<System.IO.IOException>(() => Toon.Save(testData, invalidPath));
+        Assert.Throws<System.IO.DirectoryNotFoundException>(() => Toon.Save(testData, invalidPath));
     }
 
     [Fact]
@@ -485,5 +492,37 @@ public class FileOperationTests : IDisposable
         public string[] Tags { get; set; } = Array.Empty<string>();
         public Dictionary<string, object> Settings { get; set; } = new();
         public TestUser[] Users { get; set; } = Array.Empty<TestUser>();
+    }
+
+    [Fact]
+    public void Save_DirectoryDoesNotExist_ThrowsDirectoryNotFoundException()
+    {
+        // Arrange
+        var testData = new { name = "Alice" };
+        var pathInNonExistentDir = Path.Combine(
+            Path.GetTempPath(),
+            Guid.NewGuid().ToString(),
+            "test.toon"
+        );
+
+        // Act & Assert
+        Assert.Throws<DirectoryNotFoundException>(() => Toon.Save(testData, pathInNonExistentDir));
+    }
+
+    [Fact]
+    public void Save_PathToNonExistentDirectory_ThrowsException()
+    {
+        // Arrange
+        var testData = new { name = "Alice" };
+        var invalidPath = Path.Combine(
+            Path.GetTempPath(), 
+            $"nonexistent_dir_{Guid.NewGuid()}", 
+            "subfolder", 
+            "test.toon"
+        );
+
+        // Act & Assert
+        // This will fail because the directory doesn't exist and File.WriteAllText doesn't create it
+        Assert.ThrowsAny<DirectoryNotFoundException>(() => Toon.Save(testData, invalidPath));
     }
 }
