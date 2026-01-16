@@ -1,6 +1,15 @@
 using System.Text.Json;
+
 using ToonFormat.Decode;
 using ToonFormat.Encode;
+
+using System.Data.Common;
+using ToonFormat.Shared;
+
+
+#if !NETSTANDARD2_0
+using System.Data;
+#endif
 
 namespace ToonFormat;
 
@@ -33,6 +42,43 @@ public static class Toon
         var resolvedOptions = options ?? new EncodeOptions();
         return ToonEncoder.EncodeValue(normalizedValue, resolvedOptions);
     }
+
+#if !NETSTANDARD2_0
+    /// <summary>
+    /// Encodes a DataTable to TOON format string.
+    /// DataTable rows are converted to a tabular format with column names as headers.
+    /// </summary>
+    /// <param name="table">The DataTable to encode. Cannot be null.</param>
+    /// <param name="options">Optional encoding options. If null, default options are used.</param>
+    /// <returns>A TOON format string representation of the DataTable in tabular format.</returns>
+    /// <exception cref="ArgumentNullException">Thrown when table is null.</exception>
+    /// <example>
+    /// <code>
+    /// DataTable table = new DataTable();
+    /// table.Columns.Add("id", typeof(int));
+    /// table.Columns.Add("name", typeof(string));
+    /// table.Columns.Add("role", typeof(string));
+    /// table.Rows.Add(1, "Alice", "admin");
+    /// table.Rows.Add(2, "Bob", "user");
+    /// 
+    /// string toonString = Toon.Encode(table);
+    /// // Result: [2]{id,name,role}:\n  1,Alice,admin\n  2,Bob,user
+    /// </code>
+    /// </example>
+    /// <remarks>
+    /// This method is only available for .NET 8.0 and later. For .NET Standard 2.0, 
+    /// convert the DataTable to a collection of objects first.
+    /// </remarks>
+    public static string Encode(DataTable table, EncodeOptions? options = null)
+    {
+        var resolvedOptions = options ?? new EncodeOptions();
+        
+        // Convert DataTable to JsonElement for encoding
+        var jsonElement = table.ToJsonElement();
+        var jsonText = jsonElement.GetRawText();
+        return ToonEncoder.EncodeValue(jsonElement, resolvedOptions);
+    }
+#endif
 
     /// <summary>
     /// Decodes a TOON format string to a JsonElement.

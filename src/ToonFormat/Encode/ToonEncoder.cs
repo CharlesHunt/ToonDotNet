@@ -25,6 +25,8 @@ internal static class ToonEncoder
 
         if (Normalizer.IsJsonArray(value))
         {
+            var keys = value.EnumerateArray().ToArray();
+               
             EncodeArray(null, value, writer, 0, options);
         }
         else if (Normalizer.IsJsonObject(value))

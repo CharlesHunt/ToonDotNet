@@ -78,6 +78,7 @@ public class User { public int Id { get; set; } public string Name { get; set; }
 #### Basic Serilialization methods
 - `Toon.Encode(object value, EncodeOptions? options = null)`
 - `Toon.Decode(string input, DecodeOptions? options = null)` → `JsonElement`
+- `Toon.Encode(DataTable table, EncodeOptions? options = null)`
 - `Toon.Decode<T>(string input, DecodeOptions? options = null, JsonSerializerOptions? jsonOptions = null)`
 #### Json Conversion methods
 - `Toon.FromJson(string jsonString, EncodeOptions? options = null)` - **Efficient JSON-to-TOON conversion**

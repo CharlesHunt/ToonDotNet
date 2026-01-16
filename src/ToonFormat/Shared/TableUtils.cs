@@ -68,47 +68,7 @@ internal static class TableUtils
 
         return list;
     }
-
-
-    /// <summary>
-    /// Converts a DataTable to a list of dictionaries suitable for TOON encoding.
-    /// Each row becomes a dictionary with column names as keys.
-    /// DBNull values are converted to null.
-    /// </summary>
-    /// <param name="table">The DataTable to convert.</param>
-    /// <returns>A list of dictionaries representing the table rows.</returns>
-    public static List<Dictionary<string, object?>> ToList(this DataTable table)
-    {
-        if (table == null)
-        {
-            throw new ArgumentNullException(nameof(table));
-        }
-
-        var list = new List<Dictionary<string, object?>>();
-
-        if (table.Rows.Count == 0)
-        {
-            foreach (DataColumn column in table.Columns)
-            {
-                list.Add(new Dictionary<string, object?>() { { column.ColumnName, null } });
-            }
-        }
-        else
-        {
-            foreach (DataRow row in table.Rows)
-            {
-                var rowDict = new Dictionary<string, object?>();
-                foreach (DataColumn col in table.Columns)
-                {
-                    var colValue = row.IsNull(col.ColumnName) ? DBNull.Value : row[col.ColumnName];
-                    rowDict.Add(col.ColumnName, colValue);
-                }
-                list.Add(rowDict);
-            }
-        }
-        
-        return list;
-    }
+       
 
     /// <summary>
     /// Converts a DataTable to a strongly-typed list of objects.
@@ -261,46 +221,33 @@ internal static class TableUtils
             throw new ArgumentNullException(nameof(table));
         }
 
-        using var stream = new MemoryStream();
+        using var stream = new System.IO.MemoryStream();
         using (var writer = new Utf8JsonWriter(stream))
         {
             writer.WriteStartArray();
 
-            if (table.Rows.Count == 0)
+            // Only write rows if there are actual data rows
+            foreach (DataRow row in table.Rows)
             {
                 writer.WriteStartObject();
+
                 foreach (DataColumn column in table.Columns)
-                {                    
-                    writer.WritePropertyName(column.ColumnName);
-                    //writer.WriteCommentValue("SchemaOnly");
-                    writer.WriteNullValue();
-                }
-                writer.WriteEndObject();
-            }
-            else
-            {
-                foreach (DataRow row in table.Rows)
                 {
-                    writer.WriteStartObject();
-
-                    foreach (DataColumn column in table.Columns)
+                    object? value = row[column];
+                    
+                    writer.WritePropertyName(column.ColumnName);
+                    
+                    if (value == null || value is DBNull)
                     {
-                        object? value = row[column];
-
-                        writer.WritePropertyName(column.ColumnName);
-
-                        if (value == null || value is DBNull)
-                        {
-                            writer.WriteNullValue();
-                        }
-                        else
-                        {
-                            WriteJsonValue(writer, value);
-                        }
+                        writer.WriteNullValue();
                     }
-
-                    writer.WriteEndObject();
+                    else
+                    {
+                        WriteJsonValue(writer, value);
+                    }
                 }
+
+                writer.WriteEndObject();
             }
 
             writer.WriteEndArray();
