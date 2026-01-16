@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\ToonFormat\ToonFormat.csproj" />
+    <ProjectReference Include="..\..\src\ToonFormat\ToonDotNet.csproj" />
   </ItemGroup>
 
   <PropertyGroup>
