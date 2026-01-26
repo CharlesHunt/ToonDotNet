@@ -59,3 +59,7 @@ The format is based on Keep a Changelog and this project adheres to Semantic Ver
 - Perfect for LLM workflows: compact TOON for prompts, JSON for system integration
 - Maintains data fidelity through round-trip conversions
 - Compatible with all existing encode/decode options
+
+## [1.6.1] - 2026-01-26
+### Added
+-- Encode **DataTable** - Convert a data table to TOON format. 
