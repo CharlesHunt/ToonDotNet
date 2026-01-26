@@ -180,6 +180,8 @@ For deeply nested, highly irregular data, plain JSON may be more compact.
 ---
 ## Package Dependencies
 
+Depending on the target framework, the following dependencies are used:
+
 - System.Text.Json (part of .NET)
 - Microsoft.SourceLink.GitHub (for source linking in PDBs)
 - NetStandard.Library (for .NET Standard 2.0 compatibility)
