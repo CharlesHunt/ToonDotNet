@@ -39,9 +39,9 @@ dotnet add package Toon.DotNet
 ```
 ---
 ## Compatibility
-- .Net8.0
+- .Net10.0 - dependency free
 - .Net9.0
-- .Net10.0 
+- .Net8.0
 - .Net Standard 2.0 (.NET Framework 4.6.1+, Mono and Unity)
 
 ---
