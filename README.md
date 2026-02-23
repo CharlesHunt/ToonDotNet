@@ -13,9 +13,10 @@ Token-Oriented Object Notation (TOON) Serializer — a compact, human-readable s
 - Strongly-typed decode support via System.Text.Json
 - Strict validation options and round-trip helpers
 - Direct JSON-to-TOON and TOON-to-JSON conversion methods for seamless interoperability.
-- File operations for reading and writing TOON and JSON data.
+- Synchronous and **async** file operations for reading and writing TOON and JSON data.
+- **Stream support** — encode to and decode from any `Stream`, sync and async, all targets.
 - Examples included. 
-- 342 Unit tests with > 95% coverage. 100% passing.
+- 410 Unit tests with > 89% coverage. 100% passing.
 
 ---
 **Targets:** 
@@ -80,6 +81,13 @@ public class User { public int Id { get; set; } public string Name { get; set; }
 - `Toon.Decode(string input, DecodeOptions? options = null)` → `JsonElement`
 - `Toon.Encode(DataTable table, EncodeOptions? options = null)`
 - `Toon.Decode<T>(string input, DecodeOptions? options = null, JsonSerializerOptions? jsonOptions = null)`
+#### Stream operations
+- `Toon.Encode(object? value, Stream stream, EncodeOptions? options = null, Encoding? encoding = null)`
+- `Toon.Decode(Stream stream, DecodeOptions? options = null, Encoding? encoding = null)` → `JsonElement`
+- `Toon.Decode<T>(Stream stream, DecodeOptions? options = null, JsonSerializerOptions? jsonOptions = null, Encoding? encoding = null)` → `T`
+- `Toon.EncodeAsync(object? value, Stream stream, EncodeOptions? options = null, Encoding? encoding = null, CancellationToken ct = default)` → `Task`
+- `Toon.DecodeAsync(Stream stream, DecodeOptions? options = null, Encoding? encoding = null, CancellationToken ct = default)` → `Task<JsonElement>`
+- `Toon.DecodeAsync<T>(Stream stream, DecodeOptions? options = null, JsonSerializerOptions? jsonOptions = null, Encoding? encoding = null, CancellationToken ct = default)` → `Task<T>`
 #### Json Conversion methods
 - `Toon.FromJson(string jsonString, EncodeOptions? options = null)` - **Efficient JSON-to-TOON conversion**
 - `Toon.FromJsonFile(string jsonFilePath, EncodeOptions? options = null)` - **Convert JSON files to TOON**
@@ -94,6 +102,70 @@ public class User { public int Id { get; set; } public string Name { get; set; }
 - `Toon.Save(object? value, string filePath, EncodeOptions? options = null)`
 - `Toon.Load<T>(string filePath, DecodeOptions? options = null, JsonSerializerOptions? jsonOptions = null)`
 - `Toon.Load(string filePath, DecodeOptions? options = null)`
+#### Async file operations
+- `Toon.SaveAsync(object? value, string filePath, EncodeOptions? options = null, CancellationToken ct = default)`
+- `Toon.LoadAsync(string filePath, DecodeOptions? options = null, CancellationToken ct = default)` → `Task<JsonElement>`
+- `Toon.LoadAsync<T>(string filePath, DecodeOptions? options = null, JsonSerializerOptions? jsonOptions = null, CancellationToken ct = default)` → `Task<T>`
+- `Toon.FromJsonFileAsync(string jsonFilePath, EncodeOptions? options = null, CancellationToken ct = default)` → `Task<string>`
+- `Toon.ToJsonFileAsync(string toonFilePath, DecodeOptions? options = null, JsonSerializerOptions? jsonOptions = null, CancellationToken ct = default)` → `Task<string>`
+- `Toon.SaveAsJsonAsync(string toonString, string jsonFilePath, DecodeOptions? options = null, JsonSerializerOptions? jsonOptions = null, CancellationToken ct = default)`
+
+---
+### Stream operations
+
+All encode and decode methods have `Stream` overloads, suitable for HTTP response bodies, `MemoryStream` pipelines, and any other stream-based scenario. Streams are always **left open** — disposal is the caller's responsibility.
+
+```csharp
+// Encode to any writable stream
+using var ms = new MemoryStream();
+Toon.Encode(data, ms);
+
+// Decode from any readable stream
+ms.Position = 0;
+JsonElement result = Toon.Decode(ms);
+
+// Strongly-typed decode from stream
+ms.Position = 0;
+var typed = Toon.Decode<UserData>(ms);
+
+// Async variants (all targets, full CancellationToken support on .NET 8+)
+using var responseStream = await httpClient.GetStreamAsync(url);
+var result = await Toon.DecodeAsync(responseStream);
+
+using var outStream = File.OpenWrite("output.toon");
+await Toon.EncodeAsync(data, outStream);
+
+// Custom encoding (default is UTF-8)
+Toon.Encode(data, stream, encoding: Encoding.Unicode);
+```
+
+**Notes:**
+- Default encoding is **UTF-8** for all stream methods.
+- The stream's current position is read from / written to as-is; seek if necessary before calling.
+- Compile-time behaviour: on .NET 8+, `EncodeAsync` uses `await using` with `DisposeAsync` for a fully async flush. On .NET Standard 2.0, a sync `Flush` is issued before dispose (the buffer write is tiny and non-blocking in practice).
+
+---
+### Async file operations
+
+Every file operation has a `*Async` counterpart that is safe to use in ASP.NET Core, Blazor, and any other async context. All methods accept an optional `CancellationToken`.
+
+```csharp
+// Save and load TOON files asynchronously
+await Toon.SaveAsync(data, "output.toon");
+JsonElement result = await Toon.LoadAsync("output.toon");
+var typed = await Toon.LoadAsync<UserData>("output.toon");
+
+// Convert JSON files to TOON and back, asynchronously
+string toon = await Toon.FromJsonFileAsync("data.json");
+string json = await Toon.ToJsonFileAsync("data.toon");
+await Toon.SaveAsJsonAsync(toon, "output.json");
+
+// With cancellation
+using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+await Toon.SaveAsync(data, "output.toon", cancellationToken: cts.Token);
+```
+
+**Compatibility note:** All async methods compile for .NET Standard 2.0 through .NET 10. On .NET 8+ the `CancellationToken` is forwarded to `File.ReadAllTextAsync` / `File.WriteAllTextAsync`. On .NET Standard 2.0, cancellation is accepted but not observed (the underlying `StreamReader`/`StreamWriter` APIs predate cancellable overloads).
 
 ---
 ### JSON to TOON Conversion

@@ -12,7 +12,7 @@ public class ToonDecoderTests
     {
         // Act & Assert
         Assert.Throws<ArgumentException>(() => Toon.Decode(""));
-        Assert.Throws<ArgumentException>(() => Toon.Decode(null!));
+        Assert.Throws<ArgumentException>(() => Toon.Decode((string)null!));
     }
 
     [Fact]
