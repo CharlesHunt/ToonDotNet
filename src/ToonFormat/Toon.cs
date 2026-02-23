@@ -18,7 +18,7 @@ namespace ToonFormat;
 /// TOON is a compact, human-readable serialization format designed for passing structured data 
 /// to Large Language Models with significantly reduced token usage.
 /// </summary>
-public static class Toon
+public static partial class Toon
 {
     /// <summary>
     /// Encodes an object to TOON format string.
