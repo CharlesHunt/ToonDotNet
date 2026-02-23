@@ -1,5 +1,6 @@
 # Toon Serializer for .NET
 
+[![NuGet](https://img.shields.io/nuget/v/Toon.DotNet.svg)](https://www.nuget.org/packages/Toon.DotNet)
 [![NuGet Downloads](https://img.shields.io/nuget/dt/Toon.DotNet.svg?label=Downloads&color=green)](https://www.nuget.org/packages/Toon.DotNet)
 
 [![.NET 10.0](https://img.shields.io/badge/.NET-10.0-blue.svg)![.NET 9.0](https://img.shields.io/badge/.NET-9.0-blue.svg)![.NET 8.0](https://img.shields.io/badge/.NET-8.0-blue.svg)](https://dotnet.microsoft.com/download)
