@@ -1,0 +1,36 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>net8.0;net9.0;net10.0</TargetFrameworks>
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <PackageId>Toon.DotNet.CSV</PackageId>
+    <Version>1.7.0</Version>
+    <Authors>Charles Hunt</Authors>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/CharlesHunt/ToonDotNet</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/CharlesHunt/ToonDotNet</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <Description>CSV integration for ToonDotNet. Convert CSV files to and from TOON format.</Description>
+    <PackageTags>toon;csv;serialization;llm;token-efficiency</PackageTags>
+    <Title>Toon.DotNet.CSV</Title>
+    <PackageIcon>hrd.png</PackageIcon>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="..\..\hrd.png">
+      <Pack>True</Pack>
+      <PackagePath>\</PackagePath>
+    </None>
+    <None Include="README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="CsvHelper" Version="33.1.0" />
+    <PackageReference Include="Toon.DotNet" Version="1.7.0" />
+  </ItemGroup>
+
+</Project>

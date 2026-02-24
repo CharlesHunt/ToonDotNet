@@ -62,4 +62,22 @@ The format is based on Keep a Changelog and this project adheres to Semantic Ver
 
 ## [1.6.1] - 2026-01-26
 ### Added
--- Encode **DataTable** - Convert a data table to TOON format. 
+- Encode **DataTable** - Convert a data table to TOON format.
+
+## [1.7.0] - 2026-02-01
+### Added
+- New package: **Toon.DotNet.CSV** v1.7.0 — CSV integration for ToonDotNet
+  - `ToonCsv.FromCsv(string, EncodeOptions?)` — convert a CSV string to a TOON tabular array
+  - `ToonCsv.FromCsv(Stream, EncodeOptions?, Encoding?)` — read CSV from any readable stream
+  - `ToonCsv.FromCsvFile(string, EncodeOptions?)` — open a CSV file and return its TOON representation
+  - `ToonCsv.SaveAsToon(string, string, EncodeOptions?)` — convert a CSV file and save the result as a `.toon` file
+  - `ToonCsv.FromCsvAsync(string, EncodeOptions?, CancellationToken)` — async CSV file to TOON string
+  - `ToonCsv.SaveAsToonAsync(string, string, EncodeOptions?, CancellationToken)` — async CSV file to TOON file
+  - `ToonCsv.ToCsv(string, DecodeOptions?)` — convert a TOON tabular array to a CSV string
+  - `ToonCsv.ToCsvStream(string, Stream, DecodeOptions?, Encoding?)` — write CSV to any writable stream
+  - `ToonCsv.ToCsvFile(string, string, DecodeOptions?)` — convert a TOON string and save as a `.csv` file
+  - `ToonCsv.ToCsvAsync(string, string, DecodeOptions?, CancellationToken)` — async TOON string to CSV file
+  - `ToonCsv.ConvertToonToCsv(string, string, DecodeOptions?)` — file-to-file `.toon` → `.csv` conversion
+  - `string.CsvToToon()` / `string.ToonToCsv()` — inline extension methods
+  - Automatic type coercion: integer, floating-point, and boolean CSV values are parsed to their native types
+  - Built on [CsvHelper](https://joshclose.github.io/CsvHelper/) for RFC 4180-compliant parsing and writing
