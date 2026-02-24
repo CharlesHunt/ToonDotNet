@@ -29,6 +29,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\ToonFormat\ToonDotNet.csproj" />
     <ProjectReference Include="..\..\src\ToonDotNet.Excel\ToonDotNet.Excel.csproj" />
+    <ProjectReference Include="..\..\src\Toon.DotNet.CSV\Toon.DotNet.CSV.csproj" />
   </ItemGroup>
 
 

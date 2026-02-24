@@ -134,16 +134,18 @@ Field-level structural comparison. Highlights added, removed, and changed proper
 
 ## Format Conversion
 
-### CSV
+### CSV ? Done
+
+> **? Implemented** in [`Toon.DotNet.Csv`](src/Toon.DotNet.CSV) v1.7.0. All operations are available on the `ToonCsv` static class with additional stream overloads, `SaveAsToon` / `SaveAsToonAsync`, `ConvertToonToCsv`, and `CsvToToon` / `ToonToCsv` extension methods. See [`src/Toon.DotNet.CSV/README.md`](src/Toon.DotNet.CSV/README.md) for the full API.
 
 | Signature | Notes |
 |-----------|-------|
-| `Toon.FromCsv(string csv, EncodeOptions?)` ? `string` | CSV string ? TOON tabular array |
-| `Toon.FromCsvFile(string csvPath, EncodeOptions?)` ? `string` | CSV file ? TOON string |
-| `Toon.FromCsvAsync(string csvPath, EncodeOptions?, CancellationToken)` ? `Task<string>` | Async version |
-| `Toon.ToCsv(string toon, DecodeOptions?)` ? `string` | TOON tabular array ? CSV string |
-| `Toon.ToCsvFile(string toon, string csvPath, DecodeOptions?)` | TOON ? CSV file |
-| `Toon.ToCsvAsync(string toon, string csvPath, DecodeOptions?, CancellationToken)` ? `Task` | Async version |
+| ~~`Toon.FromCsv(string csv, EncodeOptions?)` ? `string`~~ | `ToonCsv.FromCsv(string, EncodeOptions?)` |
+| ~~`Toon.FromCsvFile(string csvPath, EncodeOptions?)` ? `string`~~ | `ToonCsv.FromCsvFile(string, EncodeOptions?)` |
+| ~~`Toon.FromCsvAsync(string csvPath, EncodeOptions?, CancellationToken)` ? `Task<string>`~~ | `ToonCsv.FromCsvAsync(string, EncodeOptions?, CancellationToken)` |
+| ~~`Toon.ToCsv(string toon, DecodeOptions?)` ? `string`~~ | `ToonCsv.ToCsv(string, DecodeOptions?)` |
+| ~~`Toon.ToCsvFile(string toon, string csvPath, DecodeOptions?)`~~ | `ToonCsv.ToCsvFile(string, string, DecodeOptions?)` |
+| ~~`Toon.ToCsvAsync(string toon, string csvPath, DecodeOptions?, CancellationToken)` ? `Task`~~ | `ToonCsv.ToCsvAsync(string, string, DecodeOptions?, CancellationToken)` |
 
 ---
 
@@ -192,7 +194,7 @@ Converts a TOON tabular array to a GitHub-flavoured Markdown table. Useful for g
 
 | Package | Description |
 |---------|-------------|
-| `Toon.DotNet.Csv` | Dedicated CSV ? TOON package with full streaming support and configurable RFC-4180 parsing |
+| ~~`Toon.DotNet.Csv`~~ | ? **Done** — released as [`Toon.DotNet.CSV`](src/Toon.DotNet.CSV) v1.7.0 with full streaming, async, and RFC 4180-compliant parsing via CsvHelper |
 | `Toon.DotNet.AspNetCore` | ASP.NET Core output formatter so controllers can return TOON responses via `Accept: application/toon` |
 | `Toon.DotNet.EFCore` | Encode `IQueryable<T>` / `DbSet<T>` results directly, streaming rows to avoid loading the full result set into memory |
 | `Toon.DotNet.Dapper` | Encode `IEnumerable<dynamic>` Dapper query results, preserving column order from the reader |

@@ -1,13 +1,16 @@
 ﻿# Toon.DotNet.CSV
+---
+
+[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![.NET](https://github.com/CharlesHunt/ToonDotNet/actions/workflows/dotnet.yml/badge.svg)](https://github.com/CharlesHunt/ToonDotNet/actions/workflows/dotnet.yml)
+
+[![.NET 10.0](https://img.shields.io/badge/.NET-10.0-blue.svg)![.NET 9.0](https://img.shields.io/badge/.NET-9.0-blue.svg)![.NET 8.0](https://img.shields.io/badge/.NET-8.0-blue.svg)](https://dotnet.microsoft.com/download)
 
 [![NuGet](https://img.shields.io/nuget/v/Toon.DotNet.CSV.svg)](https://www.nuget.org/packages/Toon.DotNet.CSV)
 [![NuGet Downloads](https://img.shields.io/nuget/dt/Toon.DotNet.CSV.svg?label=Downloads&color=green)](https://www.nuget.org/packages/Toon.DotNet.CSV)
-[![.NET 10.0](https://img.shields.io/badge/.NET-10.0-blue.svg)![.NET 9.0](https://img.shields.io/badge/.NET-9.0-blue.svg)![.NET 8.0](https://img.shields.io/badge/.NET-8.0-blue.svg)](https://dotnet.microsoft.com/download)
-[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-
-CSV integration for [ToonDotNet](https://www.nuget.org/packages/Toon.DotNet) — convert CSV files, strings, and streams to and from [TOON format](https://github.com/CharlesHunt/ToonDotNet).
 
 ---
+### CSV integration for [ToonDotNet](https://www.nuget.org/packages/Toon.DotNet) — convert CSV files, strings, and streams to and from [TOON format](https://github.com/CharlesHunt/ToonDotNet).
 
 ## Features
 
@@ -39,6 +42,7 @@ CSV integration for [ToonDotNet](https://www.nuget.org/packages/Toon.DotNet) —
 - Built on [CsvHelper](https://joshclose.github.io/CsvHelper/) for robust, RFC 4180-compliant CSV parsing and writing
 - All encode/decode calls accept the standard `EncodeOptions` and `DecodeOptions` from `Toon.DotNet`
 - Streams are left open after read and write calls
+- 69 unit tests, 100% passing, 88% code coverage
 
 ---
 
