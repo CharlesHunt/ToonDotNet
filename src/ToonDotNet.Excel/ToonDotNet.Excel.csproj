@@ -7,15 +7,15 @@
     <Nullable>enable</Nullable>
     <LangVersion>latest</LangVersion>
     <PackageId>Toon.DotNet.Excel</PackageId>
-    <Version>1.7.0</Version>
+    <Version>1.7.1</Version>
     <Authors>Charles Hunt</Authors>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
-    <PackageProjectUrl>https://github.com/CharlesHunt/ToonDotNet</PackageProjectUrl>
-    <RepositoryUrl>https://github.com/CharlesHunt/ToonDotNet</RepositoryUrl>
+    <PackageProjectUrl>https://github.com/CharlesHunt/ToonDotNet/tree/master/src/ToonDotNet.Excel</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/CharlesHunt/ToonDotNet/tree/master/src/ToonDotNet.Excel</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
-    <Description>Excel integration for ToonDotNet. Convert Excel workbooks and worksheets to and from TOON format.</Description>
-    <PackageTags>toon;excel;xlsx;serialization;llm;token-efficiency</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>
+    <Description>Excel integration for ToonDotNet. Convert Excel workbooks and worksheets to and from TOON format.</Description>
+    <PackageTags>toon;excel;xlsx;serialization;llm;token-efficiency</PackageTags>    
     <Title>Toon.DotNet.Excel</Title>
     <PackageIcon>hrd.png</PackageIcon>
   </PropertyGroup>
@@ -30,7 +30,7 @@
 
   <ItemGroup>
     <PackageReference Include="ClosedXML" Version="0.105.0" />
-    <PackageReference Include="Toon.DotNet" Version="1.7.0" />
+    <PackageReference Include="Toon.DotNet" Version="1.7.1" />
   </ItemGroup>
 
   <ItemGroup>
