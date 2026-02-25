@@ -55,7 +55,7 @@ public class FileOperationAsyncTests : IDisposable
         var filePath = GetTempFilePath();
 
         // Act
-        await Toon.SaveAsync(null, filePath);
+        await Toon.SaveAsync((object?)null, filePath);
 
         // Assert
         Assert.True(File.Exists(filePath));

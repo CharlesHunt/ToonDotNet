@@ -60,6 +60,45 @@ public static partial class Toon
         await WriteFileAsync(filePath, toonString, cancellationToken).ConfigureAwait(false);
     }
 
+#if !NETSTANDARD2_0
+    /// <summary>
+    /// Asynchronously encodes a <see cref="System.Data.DataTable"/> to TOON format and writes
+    /// it to the file at <paramref name="filePath"/>, creating or overwriting the file.
+    /// </summary>
+    /// <param name="table">The <see cref="System.Data.DataTable"/> to encode. Cannot be null.</param>
+    /// <param name="filePath">Destination file path. Cannot be null or empty.</param>
+    /// <param name="encodeOptions">Optional encoding options. If null, defaults are used.</param>
+    /// <param name="cancellationToken">Token to cancel the asynchronous operation.</param>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="table"/> is null.</exception>
+    /// <exception cref="ArgumentException">Thrown when <paramref name="filePath"/> is null or empty.</exception>
+    /// <example>
+    /// <code>
+    /// var table = new DataTable();
+    /// table.Columns.Add("id", typeof(int));
+    /// table.Columns.Add("name", typeof(string));
+    /// table.Rows.Add(1, "Alice");
+    /// table.Rows.Add(2, "Bob");
+    ///
+    /// await Toon.SaveAsync(table, "output.toon");
+    /// </code>
+    /// </example>
+    public static async Task SaveAsync(
+        System.Data.DataTable table,
+        string filePath,
+        EncodeOptions? encodeOptions = null,
+        CancellationToken cancellationToken = default)
+    {
+        if (table is null)
+            throw new ArgumentNullException(nameof(table));
+
+        if (string.IsNullOrEmpty(filePath))
+            throw new ArgumentException("File path cannot be null or empty", nameof(filePath));
+
+        var toonString = Encode(table, encodeOptions);
+        await WriteFileAsync(filePath, toonString, cancellationToken).ConfigureAwait(false);
+    }
+#endif
+
     /// <summary>
     /// Asynchronously reads a TOON file and decodes it to a <see cref="JsonElement"/>.
     /// </summary>

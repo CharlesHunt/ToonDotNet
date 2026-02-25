@@ -20,7 +20,7 @@ Token-Oriented Object Notation (TOON) Serializer — a compact, human-readable s
 - Direct JSON-to-TOON and TOON-to-JSON conversion methods for seamless interoperability.
 - Synchronous and **async** file operations for reading and writing TOON and JSON data.
 - **Stream support** — encode to and decode from any `Stream`, sync and async, all targets.
-- 406 Unit tests with > 89% coverage. 100% passing.
+- 422 Unit tests with > 89% coverage. 100% passing.
 - Examples included. 
 
 ---
@@ -109,6 +109,7 @@ public class User { public int Id { get; set; } public string Name { get; set; }
 - `Toon.Load(string filePath, DecodeOptions? options = null)`
 #### Async file operations
 - `Toon.SaveAsync(object? value, string filePath, EncodeOptions? options = null, CancellationToken ct = default)`
+- `Toon.SaveAsync(DataTable table, string filePath, EncodeOptions? options = null, CancellationToken ct = default)` *(.NET 8+ / not available on .NET Standard 2.0)*
 - `Toon.LoadAsync(string filePath, DecodeOptions? options = null, CancellationToken ct = default)` → `Task<JsonElement>`
 - `Toon.LoadAsync<T>(string filePath, DecodeOptions? options = null, JsonSerializerOptions? jsonOptions = null, CancellationToken ct = default)` → `Task<T>`
 - `Toon.FromJsonFileAsync(string jsonFilePath, EncodeOptions? options = null, CancellationToken ct = default)` → `Task<string>`
@@ -159,6 +160,14 @@ Every file operation has a `*Async` counterpart that is safe to use in ASP.NET C
 await Toon.SaveAsync(data, "output.toon");
 JsonElement result = await Toon.LoadAsync("output.toon");
 var typed = await Toon.LoadAsync<UserData>("output.toon");
+
+// Save a DataTable to a TOON file asynchronously (.NET 8+)
+var table = new DataTable();
+table.Columns.Add("id", typeof(int));
+table.Columns.Add("name", typeof(string));
+table.Rows.Add(1, "Alice");
+table.Rows.Add(2, "Bob");
+await Toon.SaveAsync(table, "output.toon");
 
 // Convert JSON files to TOON and back, asynchronously
 string toon = await Toon.FromJsonFileAsync("data.json");

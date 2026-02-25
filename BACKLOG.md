@@ -40,13 +40,15 @@ Currently `IsValid` only accepts a `string`. These overloads avoid the caller ha
 
 ---
 
-### DataTable async overload
+### DataTable async overload ? *Implemented*
 
 ```csharp
 Task Toon.SaveAsync(DataTable, string filePath, EncodeOptions?, CancellationToken)
 ```
 
-The synchronous `Toon.Encode(DataTable)` exists, but there is no async file-save counterpart for `DataTable`.
+~~The synchronous `Toon.Encode(DataTable)` exists, but there is no async file-save counterpart for `DataTable`.~~
+
+Implemented in `ToonAsync.cs`. Guarded by `#if !NETSTANDARD2_0`. Validates `table` (ArgumentNullException) and `filePath` (ArgumentException). 16 new tests added in `DataTableSaveAsyncTests.cs`.
 
 ---
 
@@ -134,7 +136,7 @@ Field-level structural comparison. Highlights added, removed, and changed proper
 
 ## Format Conversion
 
-### CSV ? Done
+### CSV ? *Implemented*
 
 > **? Implemented** in [`Toon.DotNet.Csv`](src/Toon.DotNet.CSV) v1.7.0. All operations are available on the `ToonCsv` static class with additional stream overloads, `SaveAsToon` / `SaveAsToonAsync`, `ConvertToonToCsv`, and `CsvToToon` / `ToonToCsv` extension methods. See [`src/Toon.DotNet.CSV/README.md`](src/Toon.DotNet.CSV/README.md) for the full API.
 
