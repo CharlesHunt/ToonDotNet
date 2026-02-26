@@ -21,9 +21,9 @@
     <PackageProjectUrl>https://github.com/CharlesHunt/ToonDotNet</PackageProjectUrl>
     <RepositoryUrl>https://github.com/CharlesHunt/ToonDotNet</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
-    <PackageTags>TOON;format;LLM;prompt;token-efficiency;data-format;serialization;tokenization;json-alternative</PackageTags>
+    <PackageTags>TOON;tokenization;format;LLM;prompt;token-efficiency;data-format;encoder;decoder;json-alternative;conversions</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>
-    <PackageReleaseNotes>See CHANGELOG.md for full release notes.</PackageReleaseNotes>
+    <PackageReleaseNotes>See CHANGELOG.md for full release notes. https://github.com/CharlesHunt/ToonDotNet/blob/master/CHANGELOG.md</PackageReleaseNotes>
     <PackageIcon>hrd.png</PackageIcon>
   </PropertyGroup>
 

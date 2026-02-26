@@ -81,3 +81,21 @@ The format is based on Keep a Changelog and this project adheres to Semantic Ver
   - `string.CsvToToon()` / `string.ToonToCsv()` — inline extension methods
   - Automatic type coercion: integer, floating-point, and boolean CSV values are parsed to their native types
   - Built on [CsvHelper](https://joshclose.github.io/CsvHelper/) for RFC 4180-compliant parsing and writing
+
+  ## [1.7.1] - 2026-02-08
+### Added
+- New package: **Toon.DotNet.Excel** v1.7.1 — Excel integration for ToonDotNet
+  - `ToonExcel.Encode(IXLWorksheet, EncodeOptions?)` — encode a single worksheet to a TOON root array (first row used as column headers)
+  - `ToonExcel.Encode(IXLWorkbook, EncodeOptions?)` — encode all worksheets to TOON root object, one key per sheet name
+  - `ToonExcel.EncodeFile(string, EncodeOptions?)` — open an `.xlsx` file and return its TOON representation
+  - `ToonExcel.SaveAsToon(string, string, EncodeOptions?)` — convert an Excel file and save the result as a `.toon` file
+  - `ToonExcel.Decode(string, DecodeOptions?)` — decode a TOON string into a new `XLWorkbook`
+  - `ToonExcel.LoadToonFile(string, DecodeOptions?)` — read a `.toon` file directly into a new `XLWorkbook`
+  - `ToonExcel.SaveAsExcel(string, string, DecodeOptions?)` — decode a TOON string and write the result as an `.xlsx` file
+  - `ToonExcel.ConvertToonToExcel(string, string, DecodeOptions?)` — file-to-file `.toon` → `.xlsx` conversion
+  - `IXLWorksheet.ToToon()` / `IXLWorkbook.ToToon()` / `string.ToExcelWorkbook()` — inline extension methods
+  - Numbers, booleans, text, `DateTime` (ISO 8601), `TimeSpan`, and blank/null cells are all handled and round-tripped faithfully
+  - Multi-sheet workbooks fully supported; sheet names are automatically sanitised and de-duplicated
+  - Built on [ClosedXML](https://github.com/ClosedXML/ClosedXML)
+- **Toon.DotNet.CSV** bumped to v1.7.1 to align with the core library and Excel package release
+- Core library (**Toon.DotNet**) — `Toon.SaveAsync(DataTable, string, EncodeOptions?, CancellationToken)` — async file-save overload for `DataTable`; guarded by `#if !NETSTANDARD2_0`
