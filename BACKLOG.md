@@ -18,6 +18,18 @@ Follows the standard .NET `Try*` pattern. Returns `false` instead of throwing wh
 
 ---
 
+### Non-throwing encode (`TryEncode`)
+
+| Signature | Returns |
+|-----------|---------|
+| `Toon.TryEncode(object?, out string?, EncodeOptions?)` | `bool` |
+| `Toon.TryEncode(object?, out string?, out Exception?, EncodeOptions?)` | `bool` |
+| `Toon.TryEncode(DataTable, out string?, EncodeOptions?)` | `bool` |
+
+Follows the standard .NET `Try*` pattern. Returns `false` and sets the `out string?` to `null` instead of throwing when encoding fails (e.g. circular references, unsupported types, or serialisation errors), making it safe to use in hot paths without a `try/catch`. The overload that includes `out Exception?` captures the underlying exception for logging or diagnostics while still avoiding a thrown exception at the call site.
+
+---
+
 ### Stream and TextWriter / TextReader overloads
 
 | Signature | Notes |
