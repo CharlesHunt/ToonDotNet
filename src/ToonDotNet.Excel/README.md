@@ -1,13 +1,16 @@
 ﻿# Toon.DotNet.Excel
 ---
 
-[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![.NET](https://github.com/CharlesHunt/ToonDotNet/actions/workflows/dotnet.yml/badge.svg)](https://github.com/CharlesHunt/ToonDotNet/actions/workflows/dotnet.yml)
-
 [![.NET 10.0](https://img.shields.io/badge/.NET-10.0-blue.svg)![.NET 9.0](https://img.shields.io/badge/.NET-9.0-blue.svg)![.NET 8.0](https://img.shields.io/badge/.NET-8.0-blue.svg)](https://dotnet.microsoft.com/download)
+[![.NET](https://github.com/CharlesHunt/ToonDotNet/actions/workflows/dotnet.yml/badge.svg)](https://github.com/CharlesHunt/ToonDotNet/actions/workflows/dotnet.yml)
+[![Nuget](https://img.shields.io/badge/platform-win%20|%20unix%20|%20osx-orange.svg)](https://dotnet.microsoft.com/download)
 
 [![NuGet](https://img.shields.io/nuget/v/Toon.DotNet.Excel.svg)](https://www.nuget.org/packages/Toon.DotNet.Excel)
 [![NuGet Downloads](https://img.shields.io/nuget/dt/Toon.DotNet.Excel.svg?label=Downloads&color=green)](https://www.nuget.org/packages/Toon.DotNet.Excel)
+
+
+[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+
 
 ---
 ### Excel integration for [ToonDotNet](https://www.nuget.org/packages/Toon.DotNet) — convert Excel workbooks and worksheets to and from [TOON format](https://github.com/CharlesHunt/ToonDotNet).
