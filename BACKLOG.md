@@ -177,32 +177,38 @@ Converts a TOON tabular array to a GitHub-flavoured Markdown table. Useful for g
 
 ## Excel Integration (`Toon.DotNet.Excel`) Enhancements
 
-### Async overloads
+### Async overloads — *Implemented*
 
 | Signature |
 |-----------|
-| `ToonExcel.EncodeAsync(IXLWorksheet, EncodeOptions?, CancellationToken)` ? `Task<string>` |
-| `ToonExcel.EncodeAsync(IXLWorkbook, EncodeOptions?, CancellationToken)` ? `Task<string>` |
-| `ToonExcel.EncodeFileAsync(string excelPath, EncodeOptions?, CancellationToken)` ? `Task<string>` |
-| `ToonExcel.SaveAsToonAsync(string excelPath, string toonPath, EncodeOptions?, CancellationToken)` ? `Task` |
-| `ToonExcel.DecodeAsync(string toonString, DecodeOptions?, CancellationToken)` ? `Task<XLWorkbook>` |
-| `ToonExcel.SaveAsExcelAsync(string toonString, string excelPath, DecodeOptions?, CancellationToken)` ? `Task` |
-| `ToonExcel.ConvertToonToExcelAsync(string toonPath, string excelPath, DecodeOptions?, CancellationToken)` ? `Task` |
+| ~~`ToonExcel.EncodeAsync(IXLWorksheet, EncodeOptions?, CancellationToken)` ? `Task<string>`~~ |
+| ~~`ToonExcel.EncodeAsync(IXLWorkbook, EncodeOptions?, CancellationToken)` ? `Task<string>`~~ |
+| ~~`ToonExcel.EncodeFileAsync(string excelPath, EncodeOptions?, CancellationToken)` ? `Task<string>`~~ |
+| ~~`ToonExcel.SaveAsToonAsync(string excelPath, string toonPath, EncodeOptions?, CancellationToken)` ? `Task`~~ |
+| ~~`ToonExcel.DecodeAsync(string toonString, DecodeOptions?, CancellationToken)` ? `Task<XLWorkbook>`~~ |
+| ~~`ToonExcel.SaveAsExcelAsync(string toonString, string excelPath, DecodeOptions?, CancellationToken)` ? `Task`~~ |
+| ~~`ToonExcel.ConvertToonToExcelAsync(string toonPath, string excelPath, DecodeOptions?, CancellationToken)` ? `Task`~~ |
 
-### Async extension methods
+In-memory overloads (`EncodeAsync(worksheet/workbook)` and `DecodeAsync(string)`) complete synchronously via `Task.FromResult` since ClosedXML has no async API. File-based overloads (`EncodeFileAsync`, `SaveAsExcelAsync`) use `Task.Run` to offload synchronous ClosedXML I/O; `SaveAsToonAsync` and `ConvertToonToExcelAsync` combine async file reads with `Task.Run` for workbook work. Implemented in `ToonExcel.cs`.
+
+### Async extension methods — *Implemented*
 
 | Signature |
 |-----------|
-| `IXLWorksheet.ToToonAsync(EncodeOptions?, CancellationToken)` ? `Task<string>` |
-| `IXLWorkbook.ToToonAsync(EncodeOptions?, CancellationToken)` ? `Task<string>` |
-| `string.ToExcelWorkbookAsync(DecodeOptions?, CancellationToken)` ? `Task<XLWorkbook>` |
+| ~~`IXLWorksheet.ToToonAsync(EncodeOptions?, CancellationToken)` ? `Task<string>`~~ |
+| ~~`IXLWorkbook.ToToonAsync(EncodeOptions?, CancellationToken)` ? `Task<string>`~~ |
+| ~~`string.ToExcelWorkbookAsync(DecodeOptions?, CancellationToken)` ? `Task<XLWorkbook>`~~ |
 
-### Sheet selection
+Implemented in `ExcelToonExtensions.cs`. Each method delegates to the corresponding `ToonExcel` async method.
+
+### Sheet selection — *Implemented*
 
 | Signature | Notes |
 |-----------|-------|
-| `ToonExcel.Encode(IXLWorkbook, string sheetName, EncodeOptions?)` ? `string` | Encode a single named sheet from a workbook |
-| `ToonExcel.Encode(IXLWorkbook, IEnumerable<string> sheetNames, EncodeOptions?)` ? `string` | Encode a subset of sheets |
+| ~~`ToonExcel.Encode(IXLWorkbook, string sheetName, EncodeOptions?)` ? `string`~~ | Encodes a single named sheet; result is a root TOON array |
+| ~~`ToonExcel.Encode(IXLWorkbook, IEnumerable<string> sheetNames, EncodeOptions?)` ? `string`~~ | Encodes a subset of sheets; result is a root TOON object |
+
+Implemented in `ToonExcel.cs`. `Encode(workbook, sheetName)` delegates to `Encode(IXLWorksheet)` and returns a root array. `Encode(workbook, sheetNames)` builds a dictionary of the requested sheets and returns a root object. Both throw `ArgumentException` when a requested sheet name is not found. 45 new tests added in `ToonExcelTests.cs`.
 
 ---
 

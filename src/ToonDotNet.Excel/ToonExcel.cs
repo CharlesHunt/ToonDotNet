@@ -117,6 +117,86 @@ public static class ToonExcel
     }
 
     // -------------------------------------------------------------------------
+    // Sheet selection
+    // -------------------------------------------------------------------------
+
+    /// <summary>
+    /// Encodes a single named worksheet from a workbook to TOON format.
+    /// The result is a root TOON array (identical to calling
+    /// <see cref="Encode(IXLWorksheet, EncodeOptions?)"/> on the named sheet directly).
+    /// </summary>
+    /// <param name="workbook">The workbook to read from.</param>
+    /// <param name="sheetName">The name of the worksheet to encode.</param>
+    /// <param name="options">Optional encoding options. If null, defaults are used.</param>
+    /// <returns>A TOON format string representing the named worksheet's data as a root array.</returns>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="workbook"/> is null.</exception>
+    /// <exception cref="ArgumentException">
+    /// Thrown when <paramref name="sheetName"/> is null or empty, or when no sheet with that name exists.
+    /// </exception>
+    /// <example>
+    /// <code>
+    /// using var workbook = new XLWorkbook("report.xlsx");
+    /// string toon = ToonExcel.Encode(workbook, "Sales");
+    /// // [3]{id,product,amount}:
+    /// //   1,Widget,9.99
+    /// </code>
+    /// </example>
+    public static string Encode(IXLWorkbook workbook, string sheetName, EncodeOptions? options = null)
+    {
+        ArgumentNullException.ThrowIfNull(workbook);
+        ArgumentException.ThrowIfNullOrEmpty(sheetName);
+
+        var worksheet = workbook.Worksheets.FirstOrDefault(ws => ws.Name == sheetName)
+            ?? throw new ArgumentException($"Sheet '{sheetName}' not found in workbook.", nameof(sheetName));
+
+        return Encode(worksheet, options);
+    }
+
+    /// <summary>
+    /// Encodes a subset of named worksheets from a workbook to TOON format.
+    /// Each selected sheet becomes a named property in the resulting TOON object, keyed by sheet name.
+    /// </summary>
+    /// <param name="workbook">The workbook to read from.</param>
+    /// <param name="sheetNames">The names of the worksheets to include. Must not be empty.</param>
+    /// <param name="options">Optional encoding options. If null, defaults are used.</param>
+    /// <returns>A TOON format string where each top-level key is one of the selected sheet names.</returns>
+    /// <exception cref="ArgumentNullException">
+    /// Thrown when <paramref name="workbook"/> or <paramref name="sheetNames"/> is null.
+    /// </exception>
+    /// <exception cref="ArgumentException">
+    /// Thrown when <paramref name="sheetNames"/> is empty, or when any named sheet does not exist.
+    /// </exception>
+    /// <example>
+    /// <code>
+    /// using var workbook = new XLWorkbook("report.xlsx");
+    /// string toon = ToonExcel.Encode(workbook, new[] { "Sales", "Costs" });
+    /// // Sales[3]{id,product,amount}:
+    /// //   ...
+    /// // Costs[2]{id,amount}:
+    /// //   ...
+    /// </code>
+    /// </example>
+    public static string Encode(IXLWorkbook workbook, IEnumerable<string> sheetNames, EncodeOptions? options = null)
+    {
+        ArgumentNullException.ThrowIfNull(workbook);
+        ArgumentNullException.ThrowIfNull(sheetNames);
+
+        var names = sheetNames.ToList();
+        if (names.Count == 0)
+            throw new ArgumentException("At least one sheet name must be specified.", nameof(sheetNames));
+
+        var sheetsData = new Dictionary<string, object?>();
+        foreach (var name in names)
+        {
+            var worksheet = workbook.Worksheets.FirstOrDefault(ws => ws.Name == name)
+                ?? throw new ArgumentException($"Sheet '{name}' not found in workbook.", nameof(sheetNames));
+            sheetsData[name] = WorksheetToRowList(worksheet);
+        }
+
+        return Toon.Encode(sheetsData, options);
+    }
+
+    // -------------------------------------------------------------------------
     // Decoding  (TOON → Excel)
     // -------------------------------------------------------------------------
 
@@ -189,6 +269,135 @@ public static class ToonExcel
         ArgumentException.ThrowIfNullOrEmpty(excelFilePath);
         using var workbook = LoadToonFile(toonFilePath, options);
         workbook.SaveAs(excelFilePath);
+    }
+
+    // -------------------------------------------------------------------------
+    // Async  (Excel → TOON and TOON → Excel)
+    // -------------------------------------------------------------------------
+
+    /// <summary>
+    /// Asynchronously encodes a single worksheet to TOON format.
+    /// Because ClosedXML worksheet access is synchronous this method completes
+    /// synchronously and returns an already-completed task.
+    /// </summary>
+    /// <param name="worksheet">The worksheet to encode.</param>
+    /// <param name="options">Optional encoding options. If null, defaults are used.</param>
+    /// <param name="cancellationToken">Token to cancel the operation before it starts.</param>
+    /// <returns>A task whose result is the TOON format string.</returns>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="worksheet"/> is null.</exception>
+    /// <exception cref="OperationCanceledException">Thrown when <paramref name="cancellationToken"/> is already cancelled.</exception>
+    public static Task<string> EncodeAsync(IXLWorksheet worksheet, EncodeOptions? options = null, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        ArgumentNullException.ThrowIfNull(worksheet);
+        return Task.FromResult(Encode(worksheet, options));
+    }
+
+    /// <summary>
+    /// Asynchronously encodes all worksheets in a workbook to TOON format.
+    /// Because ClosedXML workbook access is synchronous this method completes
+    /// synchronously and returns an already-completed task.
+    /// </summary>
+    /// <param name="workbook">The workbook to encode.</param>
+    /// <param name="options">Optional encoding options. If null, defaults are used.</param>
+    /// <param name="cancellationToken">Token to cancel the operation before it starts.</param>
+    /// <returns>A task whose result is the TOON format string.</returns>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="workbook"/> is null.</exception>
+    /// <exception cref="OperationCanceledException">Thrown when <paramref name="cancellationToken"/> is already cancelled.</exception>
+    public static Task<string> EncodeAsync(IXLWorkbook workbook, EncodeOptions? options = null, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        ArgumentNullException.ThrowIfNull(workbook);
+        return Task.FromResult(Encode(workbook, options));
+    }
+
+    /// <summary>
+    /// Asynchronously opens an Excel (.xlsx) file and encodes its contents to TOON format.
+    /// The file is opened on a background thread to avoid blocking the caller.
+    /// </summary>
+    /// <param name="excelFilePath">Path to the .xlsx file.</param>
+    /// <param name="options">Optional encoding options. If null, defaults are used.</param>
+    /// <param name="cancellationToken">Token to cancel the background operation.</param>
+    /// <returns>A task whose result is the TOON format string.</returns>
+    /// <exception cref="ArgumentException">Thrown when <paramref name="excelFilePath"/> is null or empty.</exception>
+    /// <exception cref="FileNotFoundException">Thrown when the file does not exist.</exception>
+    public static Task<string> EncodeFileAsync(string excelFilePath, EncodeOptions? options = null, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(excelFilePath);
+        if (!File.Exists(excelFilePath))
+            throw new FileNotFoundException($"Excel file not found: {excelFilePath}", excelFilePath);
+
+        return Task.Run(() => EncodeFile(excelFilePath, options), cancellationToken);
+    }
+
+    /// <summary>
+    /// Asynchronously reads an Excel file and saves its contents as a TOON file.
+    /// </summary>
+    /// <param name="excelFilePath">Path to the source .xlsx file.</param>
+    /// <param name="toonFilePath">Path to the destination .toon file to create or overwrite.</param>
+    /// <param name="options">Optional encoding options. If null, defaults are used.</param>
+    /// <param name="cancellationToken">Token to cancel the operation.</param>
+    /// <exception cref="ArgumentException">Thrown when either path is null or empty.</exception>
+    /// <exception cref="FileNotFoundException">Thrown when the Excel file does not exist.</exception>
+    public static async Task SaveAsToonAsync(string excelFilePath, string toonFilePath, EncodeOptions? options = null, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(toonFilePath);
+        var toon = await EncodeFileAsync(excelFilePath, options, cancellationToken).ConfigureAwait(false);
+        await File.WriteAllTextAsync(toonFilePath, toon, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Asynchronously decodes a TOON string into a new <see cref="XLWorkbook"/>.
+    /// Because TOON decoding and workbook construction are synchronous this method
+    /// completes synchronously and returns an already-completed task.
+    /// The caller is responsible for disposing the returned workbook.
+    /// </summary>
+    /// <param name="toonString">The TOON format string to decode.</param>
+    /// <param name="options">Optional decoding options. If null, defaults are used.</param>
+    /// <param name="cancellationToken">Token to cancel the operation before it starts.</param>
+    /// <returns>A task whose result is a new <see cref="XLWorkbook"/> populated from the TOON data.</returns>
+    /// <exception cref="ArgumentException">Thrown when <paramref name="toonString"/> is null or empty.</exception>
+    /// <exception cref="OperationCanceledException">Thrown when <paramref name="cancellationToken"/> is already cancelled.</exception>
+    public static Task<XLWorkbook> DecodeAsync(string toonString, DecodeOptions? options = null, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return Task.FromResult(Decode(toonString, options));
+    }
+
+    /// <summary>
+    /// Asynchronously decodes a TOON string and saves the result as an Excel (.xlsx) file.
+    /// The workbook is saved on a background thread to avoid blocking the caller.
+    /// </summary>
+    /// <param name="toonString">The TOON format string to decode.</param>
+    /// <param name="excelFilePath">Path to the destination .xlsx file to create or overwrite.</param>
+    /// <param name="options">Optional decoding options. If null, defaults are used.</param>
+    /// <param name="cancellationToken">Token to cancel the background operation.</param>
+    /// <exception cref="ArgumentException">Thrown when either argument is null or empty.</exception>
+    public static Task SaveAsExcelAsync(string toonString, string excelFilePath, DecodeOptions? options = null, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(excelFilePath);
+        return Task.Run(() => SaveAsExcel(toonString, excelFilePath, options), cancellationToken);
+    }
+
+    /// <summary>
+    /// Asynchronously reads a TOON file and converts it to an Excel (.xlsx) file.
+    /// The TOON file is read asynchronously; workbook construction and save run on a background thread.
+    /// </summary>
+    /// <param name="toonFilePath">Path to the source .toon file.</param>
+    /// <param name="excelFilePath">Path to the destination .xlsx file to create or overwrite.</param>
+    /// <param name="options">Optional decoding options. If null, defaults are used.</param>
+    /// <param name="cancellationToken">Token to cancel the operation.</param>
+    /// <exception cref="ArgumentException">Thrown when either path is null or empty.</exception>
+    /// <exception cref="FileNotFoundException">Thrown when the TOON file does not exist.</exception>
+    public static async Task ConvertToonToExcelAsync(string toonFilePath, string excelFilePath, DecodeOptions? options = null, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(toonFilePath);
+        ArgumentException.ThrowIfNullOrEmpty(excelFilePath);
+        if (!File.Exists(toonFilePath))
+            throw new FileNotFoundException($"TOON file not found: {toonFilePath}", toonFilePath);
+
+        var toon = await File.ReadAllTextAsync(toonFilePath, cancellationToken).ConfigureAwait(false);
+        await Task.Run(() => { using var wb = Decode(toon, options); wb.SaveAs(excelFilePath); }, cancellationToken).ConfigureAwait(false);
     }
 
     // -------------------------------------------------------------------------

@@ -718,4 +718,494 @@ public class ToonExcelTests : IDisposable
         Assert.True(decoded.Worksheet(1).Cell(2, 2).GetBoolean());
         Assert.False(decoded.Worksheet(1).Cell(3, 2).GetBoolean());
     }
+
+    // =========================================================================
+    // ToonExcel.Encode(IXLWorkbook, string sheetName) — single sheet selection
+    // =========================================================================
+
+    [Fact]
+    public void Encode_SheetByName_NullWorkbook_ThrowsArgumentNullException()
+    {
+        Assert.Throws<ArgumentNullException>(() => ToonExcel.Encode((IXLWorkbook)null!, "Products"));
+    }
+
+    [Fact]
+    public void Encode_SheetByName_NullName_ThrowsArgumentNullException()
+    {
+        using var wb = CreateProductsWorkbook();
+        Assert.Throws<ArgumentNullException>(() => ToonExcel.Encode(wb, (string)null!));
+    }
+
+    [Fact]
+    public void Encode_SheetByName_EmptyName_ThrowsArgumentException()
+    {
+        using var wb = CreateProductsWorkbook();
+        Assert.Throws<ArgumentException>(() => ToonExcel.Encode(wb, ""));
+    }
+
+    [Fact]
+    public void Encode_SheetByName_NonExistentSheet_ThrowsArgumentException()
+    {
+        using var wb = CreateProductsWorkbook();
+        Assert.Throws<ArgumentException>(() => ToonExcel.Encode(wb, "DoesNotExist"));
+    }
+
+    [Fact]
+    public void Encode_SheetByName_ReturnsRootArray()
+    {
+        using var wb = CreateProductsWorkbook();
+
+        var result = ToonExcel.Encode(wb, "Products");
+
+        Assert.Equal(JsonValueKind.Array, Toon.Decode(result).ValueKind);
+    }
+
+    [Fact]
+    public void Encode_SheetByName_ProducesSameResultAsEncodeWorksheet()
+    {
+        using var wb = CreateProductsWorkbook();
+
+        var viaName      = ToonExcel.Encode(wb, "Products");
+        var viaWorksheet = ToonExcel.Encode(wb.Worksheet("Products"));
+
+        Assert.Equal(viaWorksheet, viaName);
+    }
+
+    [Fact]
+    public void Encode_SheetByName_PreservesRowData()
+    {
+        using var wb = CreateProductsWorkbook();
+
+        var result = ToonExcel.Encode(wb, "Products");
+        var rows   = Toon.Decode(result).EnumerateArray().ToArray();
+
+        Assert.Equal(2, rows.Length);
+        Assert.Equal("Widget", rows[0].GetProperty("name").GetString());
+    }
+
+    // =========================================================================
+    // ToonExcel.Encode(IXLWorkbook, IEnumerable<string>) — subset selection
+    // =========================================================================
+
+    [Fact]
+    public void Encode_SubsetSheets_NullWorkbook_ThrowsArgumentNullException()
+    {
+        Assert.Throws<ArgumentNullException>(() =>
+            ToonExcel.Encode((IXLWorkbook)null!, new[] { "Products" }));
+    }
+
+    [Fact]
+    public void Encode_SubsetSheets_NullNames_ThrowsArgumentNullException()
+    {
+        using var wb = CreateProductsWorkbook();
+        Assert.Throws<ArgumentNullException>(() =>
+            ToonExcel.Encode(wb, (IEnumerable<string>)null!));
+    }
+
+    [Fact]
+    public void Encode_SubsetSheets_EmptyList_ThrowsArgumentException()
+    {
+        using var wb = CreateProductsWorkbook();
+        Assert.Throws<ArgumentException>(() =>
+            ToonExcel.Encode(wb, Enumerable.Empty<string>()));
+    }
+
+    [Fact]
+    public void Encode_SubsetSheets_NonExistentSheet_ThrowsArgumentException()
+    {
+        using var wb = CreateMultiSheetWorkbook();
+        Assert.Throws<ArgumentException>(() =>
+            ToonExcel.Encode(wb, new[] { "Products", "NoSuchSheet" }));
+    }
+
+    [Fact]
+    public void Encode_SubsetSheets_ReturnsRootObject()
+    {
+        using var wb = CreateMultiSheetWorkbook();
+
+        var result = ToonExcel.Encode(wb, new[] { "Products", "Customers" });
+
+        Assert.Equal(JsonValueKind.Object, Toon.Decode(result).ValueKind);
+    }
+
+    [Fact]
+    public void Encode_SubsetSheets_ContainsOnlySelectedKeys()
+    {
+        using var wb = CreateMultiSheetWorkbook();
+
+        var result  = ToonExcel.Encode(wb, new[] { "Products" });
+        var decoded = Toon.Decode(result);
+
+        Assert.True(decoded.TryGetProperty("Products", out _));
+        Assert.False(decoded.TryGetProperty("Customers", out _));
+    }
+
+    [Fact]
+    public void Encode_SubsetSheets_TwoSheets_ContainsBothKeys()
+    {
+        using var wb = CreateMultiSheetWorkbook();
+
+        var result  = ToonExcel.Encode(wb, new[] { "Products", "Customers" });
+        var decoded = Toon.Decode(result);
+
+        Assert.True(decoded.TryGetProperty("Products", out _));
+        Assert.True(decoded.TryGetProperty("Customers", out _));
+    }
+
+    [Fact]
+    public void Encode_SubsetSheets_PreservesDataPerSheet()
+    {
+        using var wb = CreateMultiSheetWorkbook();
+
+        var result  = ToonExcel.Encode(wb, new[] { "Products", "Customers" });
+        var decoded = Toon.Decode(result);
+
+        Assert.Equal("Widget", decoded.GetProperty("Products")[0].GetProperty("name").GetString());
+        Assert.Equal("Alice",  decoded.GetProperty("Customers")[0].GetProperty("name").GetString());
+    }
+
+    // =========================================================================
+    // ToonExcel.EncodeAsync (worksheet / workbook)
+    // =========================================================================
+
+    [Fact]
+    public async Task EncodeAsync_Worksheet_ProducesSameResultAsSync()
+    {
+        using var wb = CreateProductsWorkbook();
+
+        var async = await ToonExcel.EncodeAsync(wb.Worksheet("Products"));
+        var sync  = ToonExcel.Encode(wb.Worksheet("Products"));
+
+        Assert.Equal(sync, async);
+    }
+
+    [Fact]
+    public async Task EncodeAsync_Workbook_ProducesSameResultAsSync()
+    {
+        using var wb = CreateMultiSheetWorkbook();
+
+        var async = await ToonExcel.EncodeAsync(wb);
+        var sync  = ToonExcel.Encode(wb);
+
+        Assert.Equal(sync, async);
+    }
+
+    [Fact]
+    public async Task EncodeAsync_Worksheet_NullWorksheet_ThrowsArgumentNullException()
+    {
+        await Assert.ThrowsAsync<ArgumentNullException>(() =>
+            ToonExcel.EncodeAsync((IXLWorksheet)null!));
+    }
+
+    [Fact]
+    public async Task EncodeAsync_Workbook_NullWorkbook_ThrowsArgumentNullException()
+    {
+        await Assert.ThrowsAsync<ArgumentNullException>(() =>
+            ToonExcel.EncodeAsync((IXLWorkbook)null!));
+    }
+
+    [Fact]
+    public async Task EncodeAsync_Worksheet_WithOptions_AppliesOptions()
+    {
+        using var wb   = CreateProductsWorkbook();
+        var opts = new EncodeOptions { Delimiter = '|' };
+
+        var result = await ToonExcel.EncodeAsync(wb.Worksheet("Products"), opts);
+
+        Assert.Contains("|", result);
+    }
+
+    [Fact]
+    public async Task EncodeAsync_Workbook_CancelledToken_ThrowsOperationCanceledException()
+    {
+        using var wb  = CreateMultiSheetWorkbook();
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        await Assert.ThrowsAsync<OperationCanceledException>(() =>
+            ToonExcel.EncodeAsync(wb, cancellationToken: cts.Token));
+    }
+
+    // =========================================================================
+    // ToonExcel.EncodeFileAsync
+    // =========================================================================
+
+    [Fact]
+    public async Task EncodeFileAsync_EmptyPath_ThrowsArgumentException()
+    {
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            ToonExcel.EncodeFileAsync(""));
+    }
+
+    [Fact]
+    public async Task EncodeFileAsync_NonExistentFile_ThrowsFileNotFoundException()
+    {
+        await Assert.ThrowsAsync<FileNotFoundException>(() =>
+            ToonExcel.EncodeFileAsync("does_not_exist.xlsx"));
+    }
+
+    [Fact]
+    public async Task EncodeFileAsync_ValidFile_ReturnsToonString()
+    {
+        var path = GetTempPath(".xlsx");
+        using (var wb = CreateProductsWorkbook())
+            wb.SaveAs(path);
+
+        var result = await ToonExcel.EncodeFileAsync(path);
+
+        Assert.NotEmpty(result);
+        Assert.True(Toon.IsValid(result));
+    }
+
+    [Fact]
+    public async Task EncodeFileAsync_ProducesSameResultAsSync()
+    {
+        var path = GetTempPath(".xlsx");
+        using (var wb = CreateProductsWorkbook())
+            wb.SaveAs(path);
+
+        var async = await ToonExcel.EncodeFileAsync(path);
+        var sync  = ToonExcel.EncodeFile(path);
+
+        Assert.Equal(sync, async);
+    }
+
+    // =========================================================================
+    // ToonExcel.SaveAsToonAsync
+    // =========================================================================
+
+    [Fact]
+    public async Task SaveAsToonAsync_ValidInputs_CreatesToonFile()
+    {
+        var xlsxPath = GetTempPath(".xlsx");
+        var toonPath = GetTempPath(".toon");
+        using (var wb = CreateProductsWorkbook())
+            wb.SaveAs(xlsxPath);
+
+        await ToonExcel.SaveAsToonAsync(xlsxPath, toonPath);
+
+        Assert.True(File.Exists(toonPath));
+        Assert.NotEmpty(await File.ReadAllTextAsync(toonPath));
+    }
+
+    [Fact]
+    public async Task SaveAsToonAsync_EmptyToonPath_ThrowsArgumentException()
+    {
+        var xlsxPath = GetTempPath(".xlsx");
+        using (var wb = CreateProductsWorkbook())
+            wb.SaveAs(xlsxPath);
+
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            ToonExcel.SaveAsToonAsync(xlsxPath, ""));
+    }
+
+    [Fact]
+    public async Task SaveAsToonAsync_ProducesSameContentAsSync()
+    {
+        var xlsxPath  = GetTempPath(".xlsx");
+        var toonAsync = GetTempPath(".toon");
+        var toonSync  = GetTempPath(".toon");
+        using (var wb = CreateProductsWorkbook())
+            wb.SaveAs(xlsxPath);
+
+        await ToonExcel.SaveAsToonAsync(xlsxPath, toonAsync);
+        ToonExcel.SaveAsToon(xlsxPath, toonSync);
+
+        Assert.Equal(
+            await File.ReadAllTextAsync(toonSync),
+            await File.ReadAllTextAsync(toonAsync));
+    }
+
+    // =========================================================================
+    // ToonExcel.DecodeAsync
+    // =========================================================================
+
+    [Fact]
+    public async Task DecodeAsync_ValidToon_ReturnsWorkbookWithSheet()
+    {
+        using var wb = await ToonExcel.DecodeAsync("[2]{id,name}:\n  1,Alice\n  2,Bob");
+
+        Assert.Single(wb.Worksheets);
+        Assert.Equal("Sheet1", wb.Worksheet(1).Name);
+    }
+
+    [Fact]
+    public async Task DecodeAsync_ProducesSameResultAsSync()
+    {
+        const string toon = "[2]{id,name}:\n  1,Alice\n  2,Bob";
+
+        using var async = await ToonExcel.DecodeAsync(toon);
+        using var sync  = ToonExcel.Decode(toon);
+
+        Assert.Equal(sync.Worksheet(1).Cell(2, 2).GetString(),
+                     async.Worksheet(1).Cell(2, 2).GetString());
+    }
+
+    [Fact]
+    public async Task DecodeAsync_CancelledToken_ThrowsOperationCanceledException()
+    {
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        await Assert.ThrowsAsync<OperationCanceledException>(() =>
+            ToonExcel.DecodeAsync("[1]{id}:\n  1", cancellationToken: cts.Token));
+    }
+
+    // =========================================================================
+    // ToonExcel.SaveAsExcelAsync
+    // =========================================================================
+
+    [Fact]
+    public async Task SaveAsExcelAsync_ValidInputs_CreatesExcelFile()
+    {
+        var xlsxPath = GetTempPath(".xlsx");
+
+        await ToonExcel.SaveAsExcelAsync("[2]{id,name}:\n  1,Alice\n  2,Bob", xlsxPath);
+
+        Assert.True(File.Exists(xlsxPath));
+    }
+
+    [Fact]
+    public async Task SaveAsExcelAsync_EmptyPath_ThrowsArgumentException()
+    {
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            ToonExcel.SaveAsExcelAsync("[1]{id}:\n  1", ""));
+    }
+
+    [Fact]
+    public async Task SaveAsExcelAsync_FileIsReadableWorkbook()
+    {
+        var xlsxPath = GetTempPath(".xlsx");
+        await ToonExcel.SaveAsExcelAsync("[2]{id,name}:\n  1,Alice\n  2,Bob", xlsxPath);
+
+        using var wb = new XLWorkbook(xlsxPath);
+
+        Assert.Equal("Alice", wb.Worksheet(1).Cell(2, 2).GetString());
+    }
+
+    // =========================================================================
+    // ToonExcel.ConvertToonToExcelAsync
+    // =========================================================================
+
+    [Fact]
+    public async Task ConvertToonToExcelAsync_ValidFiles_CreatesExcelFile()
+    {
+        var toonPath = GetTempPath(".toon");
+        var xlsxPath = GetTempPath(".xlsx");
+        await File.WriteAllTextAsync(toonPath, "[1]{id,name}:\n  1,Widget");
+
+        await ToonExcel.ConvertToonToExcelAsync(toonPath, xlsxPath);
+
+        Assert.True(File.Exists(xlsxPath));
+    }
+
+    [Fact]
+    public async Task ConvertToonToExcelAsync_NonExistentToonFile_ThrowsFileNotFoundException()
+    {
+        await Assert.ThrowsAsync<FileNotFoundException>(() =>
+            ToonExcel.ConvertToonToExcelAsync("missing.toon", GetTempPath(".xlsx")));
+    }
+
+    [Fact]
+    public async Task ConvertToonToExcelAsync_EmptyExcelPath_ThrowsArgumentException()
+    {
+        var toonPath = GetTempPath(".toon");
+        await File.WriteAllTextAsync(toonPath, "[1]{id}:\n  1");
+
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            ToonExcel.ConvertToonToExcelAsync(toonPath, ""));
+    }
+
+    [Fact]
+    public async Task ConvertToonToExcelAsync_FileIsReadableWithCorrectData()
+    {
+        var toonPath = GetTempPath(".toon");
+        var xlsxPath = GetTempPath(".xlsx");
+        await File.WriteAllTextAsync(toonPath, "[2]{id,name}:\n  1,Alice\n  2,Bob");
+
+        await ToonExcel.ConvertToonToExcelAsync(toonPath, xlsxPath);
+
+        using var wb = new XLWorkbook(xlsxPath);
+        Assert.Equal("Alice", wb.Worksheet(1).Cell(2, 2).GetString());
+    }
+
+    // =========================================================================
+    // Async extension methods
+    // =========================================================================
+
+    [Fact]
+    public async Task ToToonAsync_Worksheet_ProducesSameResultAsSync()
+    {
+        using var wb = CreateProductsWorkbook();
+
+        var async = await wb.Worksheet("Products").ToToonAsync();
+        var sync  = wb.Worksheet("Products").ToToon();
+
+        Assert.Equal(sync, async);
+    }
+
+    [Fact]
+    public async Task ToToonAsync_Workbook_ProducesSameResultAsSync()
+    {
+        using var wb = CreateMultiSheetWorkbook();
+
+        var async = await wb.ToToonAsync();
+        var sync  = wb.ToToon();
+
+        Assert.Equal(sync, async);
+    }
+
+    [Fact]
+    public async Task ToToonAsync_Worksheet_WithOptions_AppliesOptions()
+    {
+        using var wb = CreateProductsWorkbook();
+        var opts = new EncodeOptions { Delimiter = '|' };
+
+        var result = await wb.Worksheet("Products").ToToonAsync(opts);
+
+        Assert.Contains("|", result);
+    }
+
+    [Fact]
+    public async Task ToToonAsync_Workbook_WithCancellationToken_Completes()
+    {
+        using var wb  = CreateProductsWorkbook();
+        using var cts = new CancellationTokenSource();
+
+        var result = await wb.ToToonAsync(cancellationToken: cts.Token);
+
+        Assert.True(Toon.IsValid(result));
+    }
+
+    [Fact]
+    public async Task ToExcelWorkbookAsync_ValidToon_ReturnsWorkbookWithCorrectSheet()
+    {
+        var toon = "[2]{id,name}:\n  1,Alice\n  2,Bob";
+
+        using var wb = await toon.ToExcelWorkbookAsync();
+
+        Assert.Equal("Sheet1", wb.Worksheet(1).Name);
+    }
+
+    [Fact]
+    public async Task ToExcelWorkbookAsync_ProducesSameResultAsSync()
+    {
+        const string toon = "[2]{id,name}:\n  1,Alice\n  2,Bob";
+
+        using var async = await toon.ToExcelWorkbookAsync();
+        using var sync  = toon.ToExcelWorkbook();
+
+        Assert.Equal(sync.Worksheet(1).Cell(2, 2).GetString(),
+                     async.Worksheet(1).Cell(2, 2).GetString());
+    }
+
+    [Fact]
+    public async Task ToExcelWorkbookAsync_CancelledToken_ThrowsOperationCanceledException()
+    {
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        await Assert.ThrowsAsync<OperationCanceledException>(() =>
+            "[1]{id}:\n  1".ToExcelWorkbookAsync(cancellationToken: cts.Token));
+    }
 }
