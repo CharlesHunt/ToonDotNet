@@ -22,7 +22,7 @@ Token-Oriented Object Notation (TOON) Serializer — a compact, human-readable s
 - Direct JSON-to-TOON and TOON-to-JSON conversion methods for seamless interoperability.
 - Synchronous and **async** file operations for reading and writing TOON and JSON data.
 - **Stream support** — encode to and decode from any `Stream`, sync and async, all targets.
-- 422 Unit tests with > 89% coverage. 100% passing.
+- 446 Unit tests with > 89% coverage. 100% passing.
 - Examples included. 
 
 ---
@@ -95,6 +95,11 @@ public class User { public int Id { get; set; } public string Name { get; set; }
 - `Toon.EncodeAsync(object? value, Stream stream, EncodeOptions? options = null, Encoding? encoding = null, CancellationToken ct = default)` → `Task`
 - `Toon.DecodeAsync(Stream stream, DecodeOptions? options = null, Encoding? encoding = null, CancellationToken ct = default)` → `Task<JsonElement>`
 - `Toon.DecodeAsync<T>(Stream stream, DecodeOptions? options = null, JsonSerializerOptions? jsonOptions = null, Encoding? encoding = null, CancellationToken ct = default)` → `Task<T>`
+- `Toon.Encode(DataTable table, Stream stream, EncodeOptions? options = null, Encoding? encoding = null)` *(.NET 8+ / not available on .NET Standard 2.0)*
+#### TextWriter / TextReader operations
+- `Toon.Encode(object? value, TextWriter writer, EncodeOptions? options = null)`
+- `Toon.Decode(TextReader reader, DecodeOptions? options = null)` → `JsonElement`
+- `Toon.Decode<T>(TextReader reader, DecodeOptions? options = null, JsonSerializerOptions? jsonOptions = null)` → `T`
 #### Json Conversion methods
 - `Toon.FromJson(string jsonString, EncodeOptions? options = null)` - **Efficient JSON-to-TOON conversion**
 - `Toon.FromJsonFile(string jsonFilePath, EncodeOptions? options = null)` - **Convert JSON files to TOON**
@@ -151,6 +156,35 @@ Toon.Encode(data, stream, encoding: Encoding.Unicode);
 - Default encoding is **UTF-8** for all stream methods.
 - The stream's current position is read from / written to as-is; seek if necessary before calling.
 - Compile-time behaviour: on .NET 8+, `EncodeAsync` uses `await using` with `DisposeAsync` for a fully async flush. On .NET Standard 2.0, a sync `Flush` is issued before dispose (the buffer write is tiny and non-blocking in practice).
+
+---
+### TextWriter / TextReader operations
+
+`TextWriter` and `TextReader` overloads let you encode and decode directly to and from any text-based abstraction — `StringWriter`, `StreamWriter`, ASP.NET Core's `HttpResponse.Body` writer, and so on. All targets are supported, including .NET Standard 2.0.
+
+```csharp
+// Encode to any TextWriter (e.g. StringWriter, StreamWriter)
+using var sw = new StringWriter();
+Toon.Encode(data, sw);
+string toon = sw.ToString();
+
+// Decode from any TextReader (e.g. StringReader, StreamReader)
+using var sr = new StringReader(toon);
+JsonElement result = Toon.Decode(sr);
+
+// Strongly-typed decode from a TextReader
+using var sr2 = new StringReader(toon);
+var typed = Toon.Decode<UserData>(sr2);
+
+// DataTable encode direct to a Stream (.NET 8+ only)
+using var ms = new MemoryStream();
+Toon.Encode(dataTable, ms);
+```
+
+**Notes:**
+- `Encode(object?, TextWriter, ...)` calls `Flush()` on the writer before returning; the writer itself is left open.
+- `Decode(TextReader, ...)` reads the entire reader content via `ReadToEnd()` then delegates to the standard string decode path.
+- `Encode(DataTable, Stream, ...)` is only available on .NET 8, .NET 9, and .NET 10 (not .NET Standard 2.0).
 
 ---
 ### Async file operations

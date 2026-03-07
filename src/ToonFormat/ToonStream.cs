@@ -1,6 +1,10 @@
 using System.Text;
 using System.Text.Json;
 
+#if !NETSTANDARD2_0
+using System.Data;
+#endif
+
 namespace ToonFormat;
 
 public static partial class Toon
@@ -91,6 +95,113 @@ public static partial class Toon
         var content = ReadFromStream(stream, encoding ?? Encoding.UTF8);
         return Decode<T>(content, options, jsonOptions);
     }
+
+    // -------------------------------------------------------------------------
+    // TextWriter / TextReader overloads
+    // -------------------------------------------------------------------------
+
+    /// <summary>
+    /// Encodes <paramref name="input"/> to TOON format and writes it to
+    /// <paramref name="writer"/>. The writer is left open after the call.
+    /// </summary>
+    /// <param name="input">The object to encode. Can be any serializable .NET object.</param>
+    /// <param name="writer">
+    /// The destination <see cref="TextWriter"/> (e.g. <see cref="StringWriter"/>,
+    /// <c>HttpResponse.Body</c>). Must not be null.
+    /// </param>
+    /// <param name="options">Optional encoding options. If null, defaults are used.</param>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="writer"/> is null.</exception>
+    /// <example>
+    /// <code>
+    /// using var sw = new StringWriter();
+    /// Toon.Encode(data, sw);
+    /// string toon = sw.ToString();
+    /// </code>
+    /// </example>
+    public static void Encode(object? input, TextWriter writer, EncodeOptions? options = null)
+    {
+        if (writer is null) throw new ArgumentNullException(nameof(writer));
+
+        writer.Write(Encode(input, options));
+        writer.Flush();
+    }
+
+    /// <summary>
+    /// Reads TOON content from <paramref name="reader"/> and decodes it to a
+    /// <see cref="JsonElement"/>. The reader is left open after the call.
+    /// </summary>
+    /// <param name="reader">The source <see cref="TextReader"/>. Must not be null.</param>
+    /// <param name="options">Optional decoding options. If null, defaults are used.</param>
+    /// <returns>A <see cref="JsonElement"/> representing the decoded data.</returns>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="reader"/> is null.</exception>
+    /// <exception cref="InvalidOperationException">Thrown when the reader contains invalid TOON syntax.</exception>
+    /// <example>
+    /// <code>
+    /// using var sr = new StringReader(toonString);
+    /// JsonElement result = Toon.Decode(sr);
+    /// </code>
+    /// </example>
+    public static JsonElement Decode(TextReader reader, DecodeOptions? options = null)
+    {
+        if (reader is null) throw new ArgumentNullException(nameof(reader));
+
+        return Decode(reader.ReadToEnd(), options);
+    }
+
+    /// <summary>
+    /// Reads TOON content from <paramref name="reader"/> and deserializes it to a
+    /// strongly-typed object of type <typeparamref name="T"/>. The reader is left open.
+    /// </summary>
+    /// <typeparam name="T">The type to deserialize to.</typeparam>
+    /// <param name="reader">The source <see cref="TextReader"/>. Must not be null.</param>
+    /// <param name="options">Optional decoding options. If null, defaults are used.</param>
+    /// <param name="jsonOptions">Optional JSON serializer options for the deserialization step.</param>
+    /// <returns>An instance of <typeparamref name="T"/> deserialized from the reader.</returns>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="reader"/> is null.</exception>
+    /// <exception cref="JsonException">Thrown when the decoded content cannot be converted to <typeparamref name="T"/>.</exception>
+    /// <example>
+    /// <code>
+    /// using var sr = new StringReader(toonString);
+    /// var result = Toon.Decode&lt;UserData&gt;(sr);
+    /// </code>
+    /// </example>
+    public static T Decode<T>(TextReader reader, DecodeOptions? options = null, JsonSerializerOptions? jsonOptions = null)
+    {
+        if (reader is null) throw new ArgumentNullException(nameof(reader));
+
+        return Decode<T>(reader.ReadToEnd(), options, jsonOptions);
+    }
+
+#if !NETSTANDARD2_0
+    /// <summary>
+    /// Encodes <paramref name="table"/> to TOON format and writes it to
+    /// <paramref name="stream"/>. The stream is left open after the call.
+    /// </summary>
+    /// <param name="table">The <see cref="DataTable"/> to encode. Cannot be null.</param>
+    /// <param name="stream">The destination stream. Must be writable.</param>
+    /// <param name="options">Optional encoding options. If null, defaults are used.</param>
+    /// <param name="encoding">
+    /// The text encoding to use. If null, <see cref="Encoding.UTF8"/> is used.
+    /// </param>
+    /// <exception cref="ArgumentNullException">
+    /// Thrown when <paramref name="table"/> or <paramref name="stream"/> is null.
+    /// </exception>
+    /// <example>
+    /// <code>
+    /// using var ms = new MemoryStream();
+    /// Toon.Encode(table, ms);
+    /// string toon = Encoding.UTF8.GetString(ms.ToArray());
+    /// </code>
+    /// </example>
+    public static void Encode(DataTable table, Stream stream, EncodeOptions? options = null, Encoding? encoding = null)
+    {
+        ArgumentNullException.ThrowIfNull(table);
+        if (stream is null) throw new ArgumentNullException(nameof(stream));
+
+        var toonString = Encode(table, options);
+        WriteToStream(stream, toonString, encoding ?? Encoding.UTF8);
+    }
+#endif
 
     // -------------------------------------------------------------------------
     // Async stream operations

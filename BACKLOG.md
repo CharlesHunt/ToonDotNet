@@ -30,14 +30,16 @@ Follows the standard .NET `Try*` pattern. Returns `false` and sets the `out stri
 
 ---
 
-### Stream and TextWriter / TextReader overloads
+### Stream and TextWriter / TextReader overloads — *Implemented*
 
 | Signature | Notes |
 |-----------|-------|
-| `Toon.Encode(object?, TextWriter, EncodeOptions?)` | Write to any `TextWriter` (e.g. `StringWriter`, `HttpResponse.Body`) |
-| `Toon.Decode(TextReader, DecodeOptions?)` ? `JsonElement` | Read from any `TextReader` |
-| `Toon.Decode<T>(TextReader, DecodeOptions?, JsonSerializerOptions?)` ? `T` | Typed read from `TextReader` |
-| `Toon.Encode(DataTable, Stream, EncodeOptions?, Encoding?)` | `DataTable` encode direct to stream |
+| ~~`Toon.Encode(object?, TextWriter, EncodeOptions?)`~~ | `Toon.Encode(object?, TextWriter, EncodeOptions?)` |
+| ~~`Toon.Decode(TextReader, DecodeOptions?)` ? `JsonElement`~~ | `Toon.Decode(TextReader, DecodeOptions?)` |
+| ~~`Toon.Decode<T>(TextReader, DecodeOptions?, JsonSerializerOptions?)` ? `T`~~ | `Toon.Decode<T>(TextReader, DecodeOptions?, JsonSerializerOptions?)` |
+| ~~`Toon.Encode(DataTable, Stream, EncodeOptions?, Encoding?)`~~ | `Toon.Encode(DataTable, Stream, EncodeOptions?, Encoding?)` — `.NET 8+` only |
+
+Implemented in `ToonStream.cs`. `TextWriter` / `TextReader` overloads delegate to the string `Encode` / `Decode` paths and are available on all targets. `Encode(DataTable, Stream, ...)` is guarded by `#if !NETSTANDARD2_0`. 24 new tests added in `TextReaderWriterTests.cs`.
 
 ---
 

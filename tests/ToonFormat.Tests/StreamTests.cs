@@ -66,7 +66,7 @@ public class StreamTests
     {
         using var ms = new MemoryStream();
 
-        Toon.Encode(null, ms);
+        Toon.Encode((object?)null, ms);
 
         Assert.True(ms.Length >= 0);
     }
