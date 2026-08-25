@@ -2,7 +2,7 @@
 ---
 
 
-[![.NET 10.0](https://img.shields.io/badge/.NET-10.0-blue.svg)![.NET 9.0](https://img.shields.io/badge/.NET-9.0-blue.svg)![.NET 8.0](https://img.shields.io/badge/.NET-8.0-blue.svg)](https://dotnet.microsoft.com/download)
+[![.NET 11.0](https://img.shields.io/badge/.NET-11.0-blue.svg)![.NET 10.0](https://img.shields.io/badge/.NET-10.0-blue.svg)![.NET 9.0](https://img.shields.io/badge/.NET-9.0-blue.svg)![.NET 8.0](https://img.shields.io/badge/.NET-8.0-blue.svg)](https://dotnet.microsoft.com/download)
 [![NetStandard2.0](https://img.shields.io/badge/NetStandard2.0-blue.svg)](https://docs.microsoft.com/en-us/dotnet/standard/net-standard)
 [![.NET](https://github.com/CharlesHunt/ToonDotNet/actions/workflows/dotnet.yml/badge.svg)](https://github.com/CharlesHunt/ToonDotNet/actions/workflows/dotnet.yml)
 [![Nuget](https://img.shields.io/badge/platform-win%20|%20unix%20|%20osx-orange.svg)](https://dotnet.microsoft.com/download)
@@ -29,6 +29,7 @@ Token-Oriented Object Notation (TOON) Serializer — a compact, human-readable s
 **Targets:** 
 .NET Standard 2.0 - maximum compatibility.
 .NET 10 - dependency free.
+.NET 11 - Preview 7 - dependency free.
 
 ---
 ## License
@@ -47,6 +48,7 @@ dotnet add package Toon.DotNet
 ```
 ---
 ## Compatibility
+- .Net11.0 - Preview 7 - dependency free
 - .Net10.0 - dependency free
 - .Net9.0
 - .Net8.0
