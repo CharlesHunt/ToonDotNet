@@ -30,7 +30,10 @@
 
   <ItemGroup>
     <PackageReference Include="CsvHelper" Version="33.1.0" />
-    <PackageReference Include="Toon.DotNet" Version="1.7.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Toon.DotNet\Toon.DotNet.csproj" />
   </ItemGroup>
 
 </Project>

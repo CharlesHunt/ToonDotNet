@@ -23,13 +23,13 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Using Include="Xunit" />
+    <ProjectReference Include="..\..\src\Toon.DotNet.CSV\Toon.DotNet.CSV.csproj" />
+    <ProjectReference Include="..\..\src\Toon.DotNet.Excel\Toon.DotNet.Excel.csproj" />
+    <ProjectReference Include="..\..\src\Toon.DotNet\Toon.DotNet.csproj" />
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\Toon.DotNet\Toon.DotNet.csproj" />
-    <ProjectReference Include="..\..\src\Toon.DotNet.Excel\Toon.DotNet.Excel.csproj" />
-    <ProjectReference Include="..\..\src\Toon.DotNet.CSV\Toon.DotNet.CSV.csproj" />
+    <Using Include="Xunit" />
   </ItemGroup>
 
 

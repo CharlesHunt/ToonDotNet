@@ -30,11 +30,14 @@
 
   <ItemGroup>
     <PackageReference Include="ClosedXML" Version="0.105.0" />
-    <PackageReference Include="Toon.DotNet" Version="1.7.2" />
   </ItemGroup>
 
   <ItemGroup>
     <InternalsVisibleTo Include="ToonDotNet.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Toon.DotNet\Toon.DotNet.csproj" />
   </ItemGroup>
 
 </Project>
