@@ -1,5 +1,6 @@
 ﻿using System.Text.Json;
 using ClosedXML.Excel;
+
 using ToonFormat;
 using ToonFormat.Excel;
 
@@ -8,6 +9,7 @@ Console.WriteLine("=== ToonFormat .NET Example ===\n");
 // Example 1: Simple object encoding
 var person = new { name = "Alice", age = 30, isActive = true };
 string toonString = Toon.Encode(person);
+
 Console.WriteLine("1. Simple Object:");
 Console.WriteLine($"Original: {JsonSerializer.Serialize(person)}");
 Console.WriteLine($"TOON:     {toonString}");
@@ -162,7 +164,6 @@ try
 {
     using (var wb = BuildSampleWorkbook())
         wb.SaveAs(xlsxPath);
-
     ToonExcel.SaveAsToon(xlsxPath, toonPath);
     Console.WriteLine($"Saved '{Path.GetFileName(xlsxPath)}' → '{Path.GetFileName(toonPath)}'");
     Console.WriteLine($"TOON file size: {new FileInfo(toonPath).Length} bytes");

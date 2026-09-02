@@ -1,10 +1,43 @@
-# ToonFormat — Feature Backlog
+# ToonFormat ï¿½ Feature Backlog
 
 Useful functions and features not yet implemented, grouped by area.
 
 ---
 
 ## Core API
+
+### Toon V4
+
+This repository already has a mature core serializer and integration packages, so Toon V4 work should be scoped as a compatibility and feature-completion effort rather than a completely new implementation. The current focus is to validate and harden the existing parser/encoder behavior in the core library while preserving the public API and the multi-target support already defined in the solution.
+
+#### Scope
+- Core implementation: [src/Toon.DotNet/Toon.cs](src/Toon.DotNet/Toon.cs), [src/Toon.DotNet/ToonAsync.cs](src/Toon.DotNet/ToonAsync.cs), [src/Toon.DotNet/ToonStream.cs](src/Toon.DotNet/ToonStream.cs), and the parser/encoder folders under [src/Toon.DotNet/Decode](src/Toon.DotNet/Decode) and [src/Toon.DotNet/Encode](src/Toon.DotNet/Encode).
+- Shared types and helpers: [src/Toon.DotNet/Types.cs](src/Toon.DotNet/Types.cs), [src/Toon.DotNet/Constants.cs](src/Toon.DotNet/Constants.cs), and the shared helpers in [src/Toon.DotNet/Shared](src/Toon.DotNet/Shared).
+- Integration coverage: [src/Toon.DotNet.CSV/ToonCsv.cs](src/Toon.DotNet.CSV/ToonCsv.cs) and [src/Toon.DotNet.Excel/ToonExcel.cs](src/Toon.DotNet.Excel/ToonExcel.cs), which must continue to interoperate with the core serializer.
+- Test surface: [tests/Toon.DotNet.Tests](tests/Toon.DotNet.Tests) with the existing xUnit suites such as [tests/Toon.DotNet.Tests/ToonParserTests.cs](tests/Toon.DotNet.Tests/ToonParserTests.cs), [tests/Toon.DotNet.Tests/ToonEncoderTests.cs](tests/Toon.DotNet.Tests/ToonEncoderTests.cs), [tests/Toon.DotNet.Tests/ToonDecoderTests.cs](tests/Toon.DotNet.Tests/ToonDecoderTests.cs), [tests/Toon.DotNet.Tests/StreamTests.cs](tests/Toon.DotNet.Tests/StreamTests.cs), [tests/Toon.DotNet.Tests/ToonCsvTests.cs](tests/Toon.DotNet.Tests/ToonCsvTests.cs), and [tests/Toon.DotNet.Tests/ToonExcelTests.cs](tests/Toon.DotNet.Tests/ToonExcelTests.cs).
+
+#### Compatibility strategy
+- Preserve the current public entry points in [src/Toon.DotNet/Toon.cs](src/Toon.DotNet/Toon.cs) and avoid breaking changes unless a clear v4 requirement demands it.
+- Maintain compatibility with the existing target frameworks declared in [src/Toon.DotNet/Toon.DotNet.csproj](src/Toon.DotNet/Toon.DotNet.csproj), [src/Toon.DotNet.CSV/Toon.DotNet.CSV.csproj](src/Toon.DotNet.CSV/Toon.DotNet.CSV.csproj), and [src/Toon.DotNet.Excel/Toon.DotNet.Excel.csproj](src/Toon.DotNet.Excel/Toon.DotNet.Excel.csproj).
+- Continue to leverage the current `#if !NETSTANDARD2_0` guards where needed for newer APIs and keep the .NET Standard 2.0 story intact.
+- Prefer additive changes to `EncodeOptions` and `DecodeOptions` over signature churn so downstream consumers are not forced to rewrite their code.
+
+#### Testing plan
+- Expand the test suite in [tests/Toon.DotNet.Tests](tests/Toon.DotNet.Tests) with dedicated v4 parser, encoder, and round-trip tests instead of relying on a single smoke test.
+- Cover the existing high-value paths already exercised by the current suites: basic serialization, delimiter handling, stream and text-reader/writer operations, file I/O, CSV conversion, and Excel conversion.
+- Keep the regression baseline aligned with the repoâ€™s current packaging and multi-targeting expectations.
+
+#### Documentation and release planning
+- Update [README.md](README.md), [CHANGELOG.md](CHANGELOG.md), and the package-specific docs in [src/Toon.DotNet.CSV/README.md](src/Toon.DotNet.CSV/README.md) and [src/Toon.DotNet.Excel/README.md](src/Toon.DotNet.Excel/README.md) as the implementation becomes stable.
+- Deliver the work in two phases: core parser/encoder and regression tests first, then docs/package release notes once validation is complete.
+- Treat the rollout as a feature release unless compatibility review proves that a breaking change is necessary.
+
+#### Acceptance criteria
+- Toon v4 examples encode and decode correctly through the core library without introducing regressions in existing behavior.
+- Existing public APIs remain callable for the current target frameworks.
+- CSV and Excel integration packages continue to round-trip data with the same expected behavior.
+- The test suite passes with new v4-focused cases added and the repo documentation clearly states the implementation status.
+- Release notes explicitly describe the supported v4 scope and any compatibility caveats for downstream users.
 
 ### Non-throwing parse (`TryDecode`)
 
@@ -30,14 +63,14 @@ Follows the standard .NET `Try*` pattern. Returns `false` and sets the `out stri
 
 ---
 
-### Stream and TextWriter / TextReader overloads — *Implemented*
+### Stream and TextWriter / TextReader overloads ï¿½ *Implemented*
 
 | Signature | Notes |
 |-----------|-------|
 | ~~`Toon.Encode(object?, TextWriter, EncodeOptions?)`~~ | `Toon.Encode(object?, TextWriter, EncodeOptions?)` |
 | ~~`Toon.Decode(TextReader, DecodeOptions?)` ? `JsonElement`~~ | `Toon.Decode(TextReader, DecodeOptions?)` |
 | ~~`Toon.Decode<T>(TextReader, DecodeOptions?, JsonSerializerOptions?)` ? `T`~~ | `Toon.Decode<T>(TextReader, DecodeOptions?, JsonSerializerOptions?)` |
-| ~~`Toon.Encode(DataTable, Stream, EncodeOptions?, Encoding?)`~~ | `Toon.Encode(DataTable, Stream, EncodeOptions?, Encoding?)` — `.NET 8+` only |
+| ~~`Toon.Encode(DataTable, Stream, EncodeOptions?, Encoding?)`~~ | `Toon.Encode(DataTable, Stream, EncodeOptions?, Encoding?)` ï¿½ `.NET 8+` only |
 
 Implemented in `ToonStream.cs`. `TextWriter` / `TextReader` overloads delegate to the string `Encode` / `Decode` paths and are available on all targets. `Encode(DataTable, Stream, ...)` is guarded by `#if !NETSTANDARD2_0`. 24 new tests added in `TextReaderWriterTests.cs`.
 
@@ -95,7 +128,7 @@ Implemented in `ToonAsync.cs`. Guarded by `#if !NETSTANDARD2_0`. Validates `tabl
 ToonDocumentInfo Toon.GetInfo(string toonString, DecodeOptions? options = null)
 ```
 
-Returns structural metadata — root value kind, top-level key names, array lengths and field lists — without producing a full `JsonElement`. Useful for quick inspection or tooling.
+Returns structural metadata ï¿½ root value kind, top-level key names, array lengths and field lists ï¿½ without producing a full `JsonElement`. Useful for quick inspection or tooling.
 
 ```csharp
 public class ToonDocumentInfo
@@ -143,7 +176,7 @@ Field-level structural comparison. Highlights added, removed, and changed proper
 | Signature | Notes |
 |-----------|-------|
 | `Toon.Encode<T>(IEnumerable<T>, EncodeOptions?)` ? `string` | Strongly-typed collection overload; avoids boxing through `object?` |
-| `Toon.EncodeLines<T>(IEnumerable<T>, Stream, EncodeOptions?, Encoding?)` | Writes rows incrementally — low memory footprint for large collections |
+| `Toon.EncodeLines<T>(IEnumerable<T>, Stream, EncodeOptions?, Encoding?)` | Writes rows incrementally ï¿½ low memory footprint for large collections |
 | `Toon.EncodeAsync<T>(IAsyncEnumerable<T>, Stream, EncodeOptions?, Encoding?, CancellationToken)` | Async streaming encode; consumes `IAsyncEnumerable` directly (e.g. EF Core query results) |
 
 ---
@@ -177,7 +210,7 @@ Converts a TOON tabular array to a GitHub-flavoured Markdown table. Useful for g
 
 ## Excel Integration (`Toon.DotNet.Excel`) Enhancements
 
-### Async overloads — *Implemented*
+### Async overloads ï¿½ *Implemented*
 
 | Signature |
 |-----------|
@@ -191,7 +224,7 @@ Converts a TOON tabular array to a GitHub-flavoured Markdown table. Useful for g
 
 In-memory overloads (`EncodeAsync(worksheet/workbook)` and `DecodeAsync(string)`) complete synchronously via `Task.FromResult` since ClosedXML has no async API. File-based overloads (`EncodeFileAsync`, `SaveAsExcelAsync`) use `Task.Run` to offload synchronous ClosedXML I/O; `SaveAsToonAsync` and `ConvertToonToExcelAsync` combine async file reads with `Task.Run` for workbook work. Implemented in `ToonExcel.cs`.
 
-### Async extension methods — *Implemented*
+### Async extension methods ï¿½ *Implemented*
 
 | Signature |
 |-----------|
@@ -201,7 +234,7 @@ In-memory overloads (`EncodeAsync(worksheet/workbook)` and `DecodeAsync(string)`
 
 Implemented in `ExcelToonExtensions.cs`. Each method delegates to the corresponding `ToonExcel` async method.
 
-### Sheet selection — *Implemented*
+### Sheet selection ï¿½ *Implemented*
 
 | Signature | Notes |
 |-----------|-------|
@@ -216,7 +249,7 @@ Implemented in `ToonExcel.cs`. `Encode(workbook, sheetName)` delegates to `Encod
 
 | Package | Description |
 |---------|-------------|
-| ~~`Toon.DotNet.Csv`~~ | ? **Done** — released as [`Toon.DotNet.CSV`](src/Toon.DotNet.CSV) v1.7.0 with full streaming, async, and RFC 4180-compliant parsing via CsvHelper |
+| ~~`Toon.DotNet.Csv`~~ | ? **Done** ï¿½ released as [`Toon.DotNet.CSV`](src/Toon.DotNet.CSV) v1.7.0 with full streaming, async, and RFC 4180-compliant parsing via CsvHelper |
 | `Toon.DotNet.AspNetCore` | ASP.NET Core output formatter so controllers can return TOON responses via `Accept: application/toon` |
 | `Toon.DotNet.EFCore` | Encode `IQueryable<T>` / `DbSet<T>` results directly, streaming rows to avoid loading the full result set into memory |
 | `Toon.DotNet.Dapper` | Encode `IEnumerable<dynamic>` Dapper query results, preserving column order from the reader |
