@@ -10,11 +10,11 @@ Toon V4 should be treated as a compatibility and feature-completion milestone fo
 - Test coverage: [tests/Toon.DotNet.Tests](tests/Toon.DotNet.Tests) with focused files such as [tests/Toon.DotNet.Tests/ToonParserTests.cs](tests/Toon.DotNet.Tests/ToonParserTests.cs), [tests/Toon.DotNet.Tests/ToonEncoderTests.cs](tests/Toon.DotNet.Tests/ToonEncoderTests.cs), [tests/Toon.DotNet.Tests/ToonDecoderTests.cs](tests/Toon.DotNet.Tests/ToonDecoderTests.cs), [tests/Toon.DotNet.Tests/StreamTests.cs](tests/Toon.DotNet.Tests/StreamTests.cs), [tests/Toon.DotNet.Tests/ToonCsvTests.cs](tests/Toon.DotNet.Tests/ToonCsvTests.cs), and [tests/Toon.DotNet.Tests/ToonExcelTests.cs](tests/Toon.DotNet.Tests/ToonExcelTests.cs).
 
 ## Spec baseline
-The repo does not currently pin the TOON spec version its parser/encoder targets — no version constant, README note, or csproj metadata references it. Before scoping further work, add an explicit baseline reference (e.g. a constant in [src/Toon.DotNet/Constants.cs](src/Toon.DotNet/Constants.cs) and a README note) so future version bumps have a fixed starting point instead of being inferred from behavior.
+✅ **Pinned.** [`Constants.SpecVersion`](src/Toon.DotNet/Constants.cs) = `"3.3.2"`, with a matching README note and package version (see [Versioning](README.md#versioning)) — this was phase 0 of the implementation order below. Future version bumps (e.g. moving to the v4.x line) now have a fixed, discoverable starting point instead of being inferred from behavior.
 
-**Updated status:** at the time this document was first drafted, the implementation predated even [toon-format/spec](https://github.com/toon-format/spec) v3.1.0 — it was missing `\uXXXX` unicode escapes (a v3.1.0 feature) on top of everything in the gap list below. [TOON_V3.md](TOON_V3.md) audited the full v3.0.x–v3.3.2 rule set separately from this document and found (and fixed) 12 correctness-risk gaps against that baseline, including the missing `\uXXXX` support. **All correctness-risk v3 gaps are now closed**, and 3 of 6 interop-risk v3 gaps are fixed (key-quoting rule split, two missing value-quoting conditions, and delimiter-aware value quoting). 3 interop-risk and 3 minor v3 gaps remain open (see TOON_V3.md's "Recommended fix order" items 11–13).
+**Status:** at the time this document was first drafted, the implementation predated even [toon-format/spec](https://github.com/toon-format/spec) v3.1.0 — it was missing `\uXXXX` unicode escapes (a v3.1.0 feature) on top of everything in the gap list below. [TOON_V3.md](TOON_V3.md) audited the full v3.0.x–v3.3.2 rule set separately from this document and found (and fixed) all 21 gaps against that baseline, including the missing `\uXXXX` support — **the v3 line is fully closed**, which is what let the pinned baseline above become `3.3.2` rather than an earlier or partial version. Everything in this document's gap list (all v4.0.0+ features: comments, key-folding removal, keyed-tabular objects, nested field groups, and the rest) remains unimplemented and is the actual subject of this document.
 
-The delimiter-scoping item specifically was evaluated three ways and deliberately scoped down: a **minimal fix** (value quoting now respects the actually-configured delimiter instead of unconditionally quoting for comma/pipe/tab) shipped; **full per-array delimiter selection** — a genuinely new `EncodeOptions` API surface letting one `Encode()` call use different delimiters for different nested arrays — was evaluated but explicitly deferred, not designed. If this v4 work ends up needing real per-array delimiter selection (e.g. for `SpecVersion`-gated per-array behavior), that design still needs to happen here first; the minimal fix does not provide it. Everything else in this document's gap list (all v4.0.0+ features: comments, key-folding removal, keyed-tabular objects, nested field groups, and the rest) remains unimplemented — none of it overlaps with what TOON_V3.md fixed.
+One v3 item is still relevant here despite being "fixed": the document-vs-active delimiter-scoping finding was evaluated three ways and deliberately scoped down during the v3 work — a **minimal fix** (value quoting now respects the actually-configured delimiter instead of unconditionally quoting for comma/pipe/tab) shipped; **full per-array delimiter selection** — a genuinely new `EncodeOptions` API surface letting one `Encode()` call use different delimiters for different nested arrays — was evaluated but explicitly deferred, not designed. If this v4 work ends up needing real per-array delimiter selection (e.g. for `SpecVersion`-gated per-array behavior), that design still needs to happen here first; the minimal fix does not provide it.
 
 ## v4.0.0 → v4.1.1 gap list
 Concrete gaps against the upstream spec, drawn from the v4.0.0, v4.1.0, and v4.1.1 release notes. Each should get its own implementation task and regression tests rather than being folded into a single "v4 support" change.
@@ -110,8 +110,48 @@ A best-effort two-pass fallback (attempt strict v4, retry with `LegacyCompatibil
 - The release notes state the supported v4 scope and any compatibility caveats for downstream users.
 
 ## Recommended implementation order
-1. Review the current core parser/encoder flow and identify the exact v4 gaps (see the [gap list](#v400--v411-gap-list) above).
-2. Land the `EncodeOptions.SpecVersion` / `DecodeOptions.LegacyCompatibility` option shapes first, with no behavior wired up yet, so later steps have a stable place to gate changes.
-3. Implement the additive/superset grammar changes (comments, keyed tabular form, nested field groups, empty list items) — these need no flag and should be covered by tests using both plain v3-shaped and v4-shaped fixtures.
-4. Implement the `Strict`-gated tightenings and the three explicit semantic-conflict rules, with regression tests proving the pre-change behavior is still reachable via `LegacyCompatibility` and the post-change behavior is the default.
-5. Update docs and package release notes once behavior is validated, explicitly calling out every default-behavior change identified above rather than describing the release as purely additive.
+Expanded to one concrete, individually testable step per gap-list row, same granularity as [TOON_V3.md](TOON_V3.md)'s fix order. Two open design questions block a clean start on phase 1 — see the end of this section.
+
+### Phase 0 — Groundwork
+1. ✅ **Done.** Pin the spec baseline explicitly (`Constants.SpecVersion`, README note, package version) — see [Spec baseline](#spec-baseline) above.
+
+### Phase 1 — Inert API surface (no behavior change yet)
+2. Add `EncodeOptions.SpecVersion` (`V3`/`V4` enum), defaulting to `V3` — no behavior wired up yet, just a stable place for later steps to branch on.
+3. Add `DecodeOptions.LegacyCompatibility` (or a mirrored `SpecVersion` enum — open question, see below), default `false`/`V4` — also inert initially.
+
+### Phase 2 — Additive/superset grammar (safe, no flag needed)
+`\uXXXX` escape handling is already done as a side effect of the v3 work (TOON_V3.md fix-order item 8), so it's dropped from this list. Remaining, roughly dependency-ordered:
+4. Bare `[]` as an empty inner-array list item.
+5. Full-line `#` comments — scanner-level, gated by the existing (currently unimplemented) `AllowComments` option, not `SpecVersion`.
+6. Nested field groups in tabular headers (RFC #46) — encoder + decoder header-grammar change.
+7. Keyed tabular form for objects (RFC #57) — builds directly on step 6's header-grammar work.
+8. Tabular key-reordering exemption — loosen round-trip/`Diff` comparison so it doesn't over-strictly require key order for tabular rows.
+9. Prototype-key handling (§15) — audit and implement normative handling for dangerous key names.
+10. Malformed-header classification (length-less bracket segments) — needs the second open design question resolved first (see below).
+
+### Phase 3 — Strict-mode tightenings (land inside the *existing* `Strict` flag)
+The single biggest compatibility risk in this plan — changes default-caller behavior with zero new options:
+11. Indentation depth-jump strict-mode error.
+12. Unquoted-key strict acceptance rule (§7.4).
+13. UTF-8 well-formedness rejection in strict mode (byte-level decode paths — `ToonStream.cs`).
+
+Each needs a "this used to silently succeed, now correctly throws under default `Strict=true`" regression test, and an explicit changelog callout — same pattern as TOON_V3.md's duplicate-key fix.
+
+### Phase 4 — Genuine semantic conflicts (gated by the new `LegacyCompatibility` opt-in)
+Not resolvable by grammar alone or by `Strict` alone:
+14. Token trimming scope (U+0020-only vs. broader whitespace).
+15. Leading-plus numeric-like strings requiring quoting (§7.2).
+16. Misplaced scalar line becoming an error in *both* strict and non-strict modes (v4.1).
+
+Each needs two tests: old behavior still reachable via `LegacyCompatibility=true`, new (correct) behavior is default.
+
+### Phase 5 — Flip the encoder default
+17. Once all v4-only encoder features (steps 6–7) are implemented and tested, flip `EncodeOptions.SpecVersion`'s default to `V4`. Deliberate, documented behavior change — changes emitted bytes, not just API shape.
+
+### Phase 6 — Integration and docs
+18. Verify `Toon.DotNet.CSV`/`Toon.DotNet.Excel` still round-trip correctly against v4 output — actually check their code paths, not just assume inheritance (the v3 work found two real CSV-specific bugs this way that weren't caught by assuming the integration packages "just inherit" core fixes).
+19. Update `README.md`, `CHANGELOG.md`, and this document's status as each phase lands.
+
+### Open design questions (resolve before starting phase 1 cleanly)
+- Step 3: single `LegacyCompatibility` bool, or a `DecodeOptions.SpecVersion` enum mirroring the encoder's? Not yet decided.
+- Step 10: is malformed-header classification `Strict`-gated (matches the pattern from the v3 malformed-bracket fix) or unconditional? The spec text doesn't make this unambiguous.

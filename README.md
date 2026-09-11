@@ -57,7 +57,7 @@ dotnet add package Toon.DotNet
 ---
 ## Spec compliance
 
-**As of `3.3.2`, this package's version number tracks the [TOON specification](https://github.com/toon-format/spec) version it implements** — see [Versioning](#versioning) below. A full compliance audit against spec v3.0.x–v3.3.2 found 21 gaps (correctness, interop, and spec-purity) — **all 21 are now fixed**, which is what brought the core library into full v3.3.2 conformance. See [`TOON_V3.md`](./TOON_V3.md) for the audit and the fixes. TOON spec v4.0+ features (comments, keyed-tabular objects, nested field groups, and more) are not yet implemented — see [`TOON_V4.md`](./TOON_V4.md) for the tracked gap list; the package version will move to the v4.x line once that work lands.
+**As of `3.3.2`, this package's version number tracks the [TOON specification](https://github.com/toon-format/spec) version it implements** — see [Versioning](#versioning) below. This is also available programmatically as `ToonFormat.Constants.SpecVersion`, so callers can log or assert which spec baseline they're running against without parsing the NuGet package version. A full compliance audit against spec v3.0.x–v3.3.2 found 21 gaps (correctness, interop, and spec-purity) — **all 21 are now fixed**, which is what brought the core library into full v3.3.2 conformance. See [`TOON_V3.md`](./TOON_V3.md) for the audit and the fixes. TOON spec v4.0+ features (comments, keyed-tabular objects, nested field groups, and more) are not yet implemented — see [`TOON_V4.md`](./TOON_V4.md) for the tracked gap list; the package version will move to the v4.x line once that work lands.
 
 ---
 ## Quick start

@@ -4,6 +4,16 @@ namespace ToonFormat.Tests;
 
 public class ToonBasicTests
 {
+    // TOON_V4.md phase 0: pins the spec baseline explicitly so future
+    // version bumps (e.g. moving to v4.x) have a fixed starting point
+    // instead of being inferred from behavior — this guards against the
+    // constant drifting silently out of sync with the docs.
+    [Fact]
+    public void Constants_SpecVersion_MatchesDocumentedBaseline()
+    {
+        Assert.Equal("3.3.2", Constants.SpecVersion);
+    }
+
     [Fact]
     public void Encode_SimpleObject_ReturnsExpectedToonFormat()
     {

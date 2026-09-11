@@ -5,6 +5,19 @@ namespace ToonFormat;
 /// </summary>
 public static class Constants
 {
+    #region Spec version
+
+    /// <summary>
+    /// The TOON format specification version this library conforms to.
+    /// See https://github.com/toon-format/spec/releases/tag/v3.3.2 and
+    /// TOON_V3.md for the compliance audit that established this
+    /// baseline. Update this when the implementation moves to a newer
+    /// spec version (see TOON_V4.md for the v4.0.0+ gap list).
+    /// </summary>
+    public const string SpecVersion = "3.3.2";
+
+    #endregion
+
     #region List markers
     
     /// <summary>
