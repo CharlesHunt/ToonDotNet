@@ -14,8 +14,9 @@ internal static class ToonParser
     /// </summary>
     /// <param name="content">The line content to parse.</param>
     /// <param name="defaultDelimiter">The default delimiter to use.</param>
+    /// <param name="strict">When true (default), a malformed bracket segment throws. When false, spec §14.2 permits falling through to key-value parsing instead (returns null).</param>
     /// <returns>Parsed header information and inline values, or null if not a valid header.</returns>
-    public static ArrayHeaderParseResult? ParseArrayHeaderLine(string content, char defaultDelimiter)
+    public static ArrayHeaderParseResult? ParseArrayHeaderLine(string content, char defaultDelimiter, bool strict = true)
     {
         string trimmed = content.TrimStart();
 
@@ -101,15 +102,28 @@ internal static class ToonParser
     string bracketContent = content[(bracketStart + 1)..bracketEnd];
 #endif
 
-        // Try to parse bracket segment
+        // Parse the bracket segment. By this point the line has an
+        // unambiguous "...[...]...:" shape, so a malformed length (spec §6:
+        // leading zeros, negative, non-numeric) is a genuine syntax error
+        // in strict mode — propagate rather than silently falling through
+        // to key-value parsing. Non-strict mode MAY fall through instead
+        // (spec §14.2); it's a choice, not a requirement, so strict mode
+        // keeps the stricter (and previously the only) behavior.
         BracketParseResult parsedBracket;
-        try
+        if (strict)
         {
             parsedBracket = ParseBracketSegment(bracketContent, defaultDelimiter);
         }
-        catch
+        else
         {
-            return null;
+            try
+            {
+                parsedBracket = ParseBracketSegment(bracketContent, defaultDelimiter);
+            }
+            catch (InvalidOperationException)
+            {
+                return null;
+            }
         }
 
         // Check for fields segment
@@ -222,7 +236,22 @@ internal static class ToonParser
 #endif
         }
 
-        if (!int.TryParse(content, out int length))
+        // Spec §12: decoders SHOULD tolerate surrounding whitespace around
+        // tokens. Trimmed here, after the delimiter-suffix check above, so
+        // a real tab/pipe delimiter marker (checked via EndsWith) is never
+        // mistaken for trimmable padding.
+        content = content.Trim();
+
+        // Spec §6: length is a non-negative integer with no leading zeros;
+        // a single "0" is the only canonical zero form.
+        if (content.Length == 0 || (content.Length > 1 && content[0] == '0'))
+        {
+            throw new InvalidOperationException($"Invalid array length: {seg}");
+        }
+
+        // NumberStyles.None additionally rejects a leading sign, so "-1"
+        // fails here too.
+        if (!int.TryParse(content, NumberStyles.None, CultureInfo.InvariantCulture, out int length))
         {
             throw new InvalidOperationException($"Invalid array length: {seg}");
         }

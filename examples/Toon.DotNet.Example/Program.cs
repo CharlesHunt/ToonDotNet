@@ -67,13 +67,13 @@ string customToon = Toon.Encode(userData, options);
 Console.WriteLine(customToon);
 Console.WriteLine();
 
-// Example 6: Different delimiters and options
+// Example 6: Size comparison percentage
 Console.WriteLine("6. Size Comparison Percentage:");
 
 decimal sizeReduction = Toon.SizeComparisonPercentage(userData, null);
 Console.WriteLine($"User data example is {sizeReduction:#0.00}% of the equivalent JSON");
 
-Console.ReadKey();
+Console.WriteLine();
 
 // ---------------------------------------------------------------------------
 // Helper: build a reusable in-memory workbook with two sheets.

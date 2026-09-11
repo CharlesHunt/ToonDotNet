@@ -271,6 +271,32 @@ internal static class ToonEncoder
             string inline = Primitives.FormatInlineArrayLine(elements, options.Delimiter, null, options.LengthMarker);
             writer.Push(depth, $"{Constants.ListItemPrefix}{inline}");
         }
+        else if (Normalizer.IsJsonArray(value))
+        {
+            // A non-primitive array as a list item (e.g. an array-of-arrays,
+            // or an array of objects that isn't tabular-eligible): spec
+            // §9.2/§9.4 requires the expanded "- [M<delim?>]:" header form
+            // with items at depth+1, not the inline shorthand above.
+            var elements = value.EnumerateArray().ToArray();
+            var tabularHeader = Normalizer.IsArrayOfObjects(value) ? ExtractTabularHeader(elements) : null;
+
+            if (tabularHeader != null)
+            {
+                string formattedHeader = Primitives.FormatHeader(elements.Length, null, options.Delimiter, options.LengthMarker, tabularHeader);
+                writer.Push(depth, $"{Constants.ListItemPrefix}{formattedHeader}");
+                WriteTabularRows(elements, tabularHeader, writer, depth + 1, options);
+            }
+            else
+            {
+                string header = Primitives.FormatHeader(elements.Length, null, options.Delimiter, options.LengthMarker);
+                writer.Push(depth, $"{Constants.ListItemPrefix}{header}");
+
+                foreach (var item in elements)
+                {
+                    EncodeListItemValue(item, writer, depth + 1, options);
+                }
+            }
+        }
         else if (Normalizer.IsJsonObject(value))
         {
             EncodeObjectAsListItem(value, writer, depth, options);
@@ -314,10 +340,13 @@ internal static class ToonEncoder
                 var header = ExtractTabularHeader(arrayElements);
                 if (header != null)
                 {
-                    // Tabular format for uniform arrays of objects
+                    // Tabular format for uniform arrays of objects. Spec
+                    // §10: rows sit at depth+2 so they don't collide with
+                    // this object's remaining fields, written at depth+1
+                    // below.
                     string formattedHeader = Primitives.FormatHeader(arrayElements.Length, firstProperty.Name, options.Delimiter, options.LengthMarker, header);
                     writer.Push(depth, $"{Constants.ListItemPrefix}{formattedHeader}");
-                    WriteTabularRows(arrayElements, header, writer, depth + 1, options);
+                    WriteTabularRows(arrayElements, header, writer, depth + 2, options);
                 }
                 else
                 {

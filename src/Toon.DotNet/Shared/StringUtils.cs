@@ -1,4 +1,6 @@
+using System.Globalization;
 using System.Text;
+using System.Text.RegularExpressions;
 
 namespace ToonFormat.Shared;
 
@@ -41,18 +43,69 @@ internal static class StringUtils
     /// Escapes a string for use in TOON format.
     /// </summary>
     /// <param name="value">The string to escape.</param>
+    /// <param name="delimiter">The active delimiter in scope for this value (spec §11.1) — a value is quoted for containing this delimiter, not for containing an inactive one.</param>
     /// <returns>The escaped string with quotes if necessary.</returns>
-    public static string EscapeString(string value)
+    public static string EscapeString(string value, char delimiter = Constants.DefaultDelimiter)
     {
         if (string.IsNullOrEmpty(value))
             return "\"\"";
 
-        // Check if the string needs quoting
-        bool needsQuoting = ShouldQuoteString(value);
-
-        if (!needsQuoting)
+        if (!ShouldQuoteString(value, delimiter))
             return value;
 
+        return QuoteAndEscape(value);
+    }
+
+    /// <summary>
+    /// Escapes a key for use in TOON format, per spec section 7.3's
+    /// unquoted-key identifier pattern rather than the value-quoting rule
+    /// set (section 7.2) used by EscapeString.
+    /// </summary>
+    /// <param name="key">The key to escape.</param>
+    /// <returns>The key as-is if it matches the unquoted-key pattern, otherwise a quoted and escaped form.</returns>
+    public static string EscapeKey(string key)
+    {
+        if (IsValidUnquotedKey(key))
+            return key;
+
+        return QuoteAndEscape(key);
+    }
+
+    /// <summary>
+    /// Checks whether a key matches the spec's unquoted-key pattern:
+    /// ^[A-Za-z_][A-Za-z0-9_.]*$
+    /// </summary>
+    private static bool IsValidUnquotedKey(string key)
+    {
+        if (string.IsNullOrEmpty(key))
+            return false;
+
+        char first = key[0];
+        if (!(IsAsciiLetter(first) || first == '_'))
+            return false;
+
+        for (int i = 1; i < key.Length; i++)
+        {
+            char c = key[i];
+            if (!(IsAsciiLetter(c) || IsAsciiDigit(c) || c == '_' || c == '.'))
+                return false;
+        }
+
+        return true;
+    }
+
+    private static bool IsAsciiLetter(char c) => (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z');
+
+    private static bool IsAsciiDigit(char c) => c >= '0' && c <= '9';
+
+    /// <summary>
+    /// Wraps a value in double quotes and escapes it per spec section 7.1.
+    /// Shared by EscapeString and EscapeKey - both use the same escape
+    /// table, only the "does this need quoting at all" decision differs
+    /// between values and keys.
+    /// </summary>
+    private static string QuoteAndEscape(string value)
+    {
         var sb = new StringBuilder();
         sb.Append(Constants.DoubleQuote);
 
@@ -76,7 +129,17 @@ internal static class StringUtils
                     sb.Append("\\t");
                     break;
                 default:
-                    sb.Append(c);
+                    // Spec §7.1: other C0 controls (U+0000-001F besides the
+                    // named escapes above) MUST be emitted as \uXXXX, not
+                    // as raw bytes (also a §15 security concern).
+                    if (c <= '\u001F')
+                    {
+                        sb.Append("\\u").Append(((int)c).ToString("x4", CultureInfo.InvariantCulture));
+                    }
+                    else
+                    {
+                        sb.Append(c);
+                    }
                     break;
             }
         }
@@ -137,9 +200,37 @@ internal static class StringUtils
                         sb.Append(Constants.Tab);
                         i++; // Skip the escaped character
                         break;
-                    default:
-                        sb.Append(c); // Keep the backslash if not a recognized escape
+                    case 'u':
+                        // Spec §7.1: exactly 4 hex digits, case-insensitive;
+                        // surrogate code points (U+D800-DFFF) MUST be
+                        // rejected.
+                        if (i + 5 >= content.Length)
+                        {
+                            throw new InvalidOperationException($"Invalid \\u escape: not enough hex digits in \"{quotedValue}\"");
+                        }
+
+#if NETSTANDARD2_0
+                        string hex = content.Substring(i + 2, 4);
+#else
+                        string hex = content[(i + 2)..(i + 6)];
+#endif
+                        if (!ushort.TryParse(hex, NumberStyles.AllowHexSpecifier, CultureInfo.InvariantCulture, out ushort codeUnit))
+                        {
+                            throw new InvalidOperationException($"Invalid \\u escape: \"{hex}\" is not valid hex in \"{quotedValue}\"");
+                        }
+
+                        if (codeUnit >= 0xD800 && codeUnit <= 0xDFFF)
+                        {
+                            throw new InvalidOperationException($"Invalid \\u escape: surrogate code point \\u{hex} is not allowed in \"{quotedValue}\"");
+                        }
+
+                        sb.Append((char)codeUnit);
+                        i += 5; // Skip 'u' plus the 4 hex digits
                         break;
+                    default:
+                        // Spec §7.1: decoder MUST reject any escape
+                        // sequence not in the table above.
+                        throw new InvalidOperationException($"Invalid escape sequence \"\\{nextChar}\" in \"{quotedValue}\"");
                 }
             }
             else
@@ -154,7 +245,9 @@ internal static class StringUtils
     /// <summary>
     /// Determines if a string should be quoted in TOON format.
     /// </summary>
-    private static bool ShouldQuoteString(string value)
+    /// <param name="value">The string to check.</param>
+    /// <param name="delimiter">The active delimiter in scope (spec §11.1) — only this delimiter forces quoting; a string containing an inactive delimiter character doesn't need quoting on that basis alone.</param>
+    private static bool ShouldQuoteString(string value, char delimiter)
     {
         if (string.IsNullOrEmpty(value))
             return true;
@@ -163,11 +256,23 @@ internal static class StringUtils
         if (value == Constants.NullLiteral || value == Constants.TrueLiteral || value == Constants.FalseLiteral)
             return true;
 
-        // Check for special characters that require quoting
+        // Spec §7.2: leading/trailing whitespace MUST be quoted.
+        if (char.IsWhiteSpace(value[0]) || char.IsWhiteSpace(value[value.Length - 1]))
+            return true;
+
+        // Spec §7.2: a value equal to or starting with "-" MUST be quoted
+        // (ambiguous with the list-item marker syntax).
+        if (value[0] == '-')
+            return true;
+
+        // Check for special characters that require quoting. Tab is a
+        // control character (caught by IsControl below) regardless of
+        // whether it's also the active delimiter, so it doesn't need a
+        // separate check here.
         foreach (char c in value)
         {
             if (char.IsControl(c) || c == Constants.DoubleQuote || c == Constants.Backslash ||
-                c == Constants.Comma || c == Constants.Pipe || c == Constants.Tab ||
+                c == delimiter ||
                 c == Constants.Colon || c == Constants.OpenBracket || c == Constants.CloseBracket ||
                 c == Constants.OpenBrace || c == Constants.CloseBrace || c == Constants.Hash)
             {
@@ -175,12 +280,19 @@ internal static class StringUtils
             }
         }
 
-        // Check if it looks like a number
-        if (double.TryParse(value, out _))
+        // Spec §7.2: numeric-like pattern (exact regex, not double.TryParse
+        // — which both over-quotes strings TryParse merely tolerates, like
+        // thousands separators or a leading "+", and under-quotes all-digit
+        // strings whose magnitude exceeds double's range).
+        if (NumericLikePattern.IsMatch(value))
             return true;
 
         return false;
     }
+
+    private static readonly Regex NumericLikePattern = new Regex(
+        @"^-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?$",
+        RegexOptions.CultureInvariant);
 
     /// <summary>
     /// Checks if a string is quoted.

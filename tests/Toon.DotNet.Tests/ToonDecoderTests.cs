@@ -8,10 +8,12 @@ namespace ToonFormat.Tests;
 public class ToonDecoderTests
 {
     [Fact]
-    public void Decode_EmptyInput_ThrowsArgumentException()
+    public void Decode_NullInput_ThrowsArgumentException()
     {
         // Act & Assert
-        Assert.Throws<ArgumentException>(() => Toon.Decode(""));
+        // Null is a .NET argument-validation concern, not a spec-defined TOON
+        // document shape; empty string is covered separately in
+        // ToonV3ComplianceTests (spec §5: empty document decodes to {}).
         Assert.Throws<ArgumentException>(() => Toon.Decode((string)null!));
     }
 
@@ -616,13 +618,7 @@ metadata:
         Assert.Equal("Alice", result[0].GetProperty("name").GetString());
     }
 
-    [Fact]
-    public void Decode_EmptyString_ThrowsInvalidOperationException()
-    {
-        // Arrange
-        var toon = "   ";
-
-        // Act & Assert
-        Assert.Throws<InvalidOperationException>(() => Toon.Decode(toon));
-    }
+    // Whitespace-only input is covered in ToonV3ComplianceTests
+    // (Decode_WhitespaceOnly_ReturnsEmptyObject) — spec §5 says an empty
+    // document decodes to {}, not a thrown exception.
 }

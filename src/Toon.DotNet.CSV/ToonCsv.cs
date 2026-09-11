@@ -278,14 +278,40 @@ public static class ToonCsv
         if (bool.TryParse(raw, out bool b))
             return b;
 
-        if (long.TryParse(raw, NumberStyles.Integer, CultureInfo.InvariantCulture, out long l))
-            return l;
+        // TOON spec §4: a leading zero followed by another digit (e.g.
+        // "05", "-0042") makes the token a string in TOON's number
+        // grammar, not a number. Coercing it to long/double here — before
+        // the value ever reaches the encoder — would silently drop the
+        // leading zero (e.g. a zip code becoming a smaller integer).
+        if (!HasForbiddenLeadingZero(raw))
+        {
+            if (long.TryParse(raw, NumberStyles.Integer, CultureInfo.InvariantCulture, out long l))
+                return l;
 
-        if (double.TryParse(raw, NumberStyles.Float | NumberStyles.AllowThousands,
-                CultureInfo.InvariantCulture, out double d))
-            return d;
+            if (double.TryParse(raw, NumberStyles.Float | NumberStyles.AllowThousands,
+                    CultureInfo.InvariantCulture, out double d))
+                return d;
+        }
 
         return raw;
+    }
+
+    /// <summary>
+    /// Checks whether a token has a leading zero followed by another digit
+    /// (e.g. "05", "-0001"), which spec §4 excludes from the number
+    /// grammar. Mirrors ToonFormat.Shared.LiteralUtils's internal check of
+    /// the same name; duplicated here since that one isn't visible across
+    /// the package boundary.
+    /// </summary>
+    private static bool HasForbiddenLeadingZero(string value)
+    {
+        int start = value.Length > 0 && value[0] == '-' ? 1 : 0;
+
+        if (value.Length <= start + 1 || value[start] != '0')
+            return false;
+
+        char next = value[start + 1];
+        return next >= '0' && next <= '9';
     }
 
     private static string WriteCsv(JsonElement element)
@@ -333,10 +359,24 @@ public static class ToonCsv
     private static string? ElementToString(JsonElement element) => element.ValueKind switch
     {
         JsonValueKind.String => element.GetString(),
-        JsonValueKind.Number => element.GetRawText(),
+        JsonValueKind.Number => FormatNumber(element),
         JsonValueKind.True   => "true",
         JsonValueKind.False  => "false",
         JsonValueKind.Null   => null,
         _                    => element.GetRawText(),
     };
+
+    /// <summary>
+    /// Formats a decoded number cleanly for CSV output. element.GetRawText()
+    /// would instead reflect the decoder's internal storage of the value
+    /// (currently G17-formatted for doubles), producing needlessly verbose
+    /// text like "9.9900000000000002" for a clean source value of "9.99".
+    /// </summary>
+    private static string FormatNumber(JsonElement element)
+    {
+        if (element.TryGetInt64(out long l))
+            return l.ToString(CultureInfo.InvariantCulture);
+
+        return element.GetDouble().ToString(CultureInfo.InvariantCulture);
+    }
 }

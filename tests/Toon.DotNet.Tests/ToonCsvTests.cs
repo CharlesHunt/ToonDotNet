@@ -103,6 +103,49 @@ public class ToonCsvTests : IDisposable
         Assert.Equal(9.99, row.GetProperty("price").GetDouble());
     }
 
+    // Spec §4 (TOON_V3.md finding, CSV-package-specific): a leading zero
+    // followed by another digit means the value is a string in TOON's
+    // number grammar, not a number. CoerceValue previously coerced such
+    // cells to long/double before the value ever reached the encoder,
+    // silently dropping the leading zero (e.g. a zip code becoming a
+    // smaller integer).
+    [Fact]
+    public void FromCsv_LeadingZeroNumericCell_PreservedAsString()
+    {
+        const string csv = "id,zip\n1,05678";
+
+        var toon = ToonCsv.FromCsv(csv);
+        var row = Toon.Decode(toon)[0];
+
+        Assert.Equal(JsonValueKind.String, row.GetProperty("zip").ValueKind);
+        Assert.Equal("05678", row.GetProperty("zip").GetString());
+    }
+
+    [Fact]
+    public void FromCsv_LeadingZeroDecimalCell_StillParsedAsNumber()
+    {
+        // "0.5" is explicitly NOT a forbidden leading zero (spec §4) —
+        // guards against the fix above over-correcting.
+        const string csv = "id,fraction\n1,0.5";
+
+        var toon = ToonCsv.FromCsv(csv);
+        var row = Toon.Decode(toon)[0];
+
+        Assert.Equal(JsonValueKind.Number, row.GetProperty("fraction").ValueKind);
+        Assert.Equal(0.5, row.GetProperty("fraction").GetDouble());
+    }
+
+    [Fact]
+    public void RoundTrip_CsvWithLeadingZeroCell_PreservesLeadingZero()
+    {
+        const string csv = "id,zip\n1,05678";
+
+        var toon = ToonCsv.FromCsv(csv);
+        var roundTrippedCsv = ToonCsv.ToCsv(toon);
+
+        Assert.Contains("05678", roundTrippedCsv);
+    }
+
     [Fact]
     public void FromCsv_BooleanValues_AreParsedAsBooleans()
     {
@@ -462,9 +505,29 @@ public class ToonCsvTests : IDisposable
         const string toon = "[1]{id,score}:\n  42,9.99";
 
         var csv = ToonCsv.ToCsv(toon);
+        // Exact-match the data row, not a loose Contains — "9.99" is a
+        // substring of the verbose "9.9900000000000002" bug this used to
+        // silently pass under.
+        var dataLine = csv.Split('\n')[1].Trim('\r');
 
-        Assert.Contains("42",   csv);
-        Assert.Contains("9.99", csv);
+        Assert.Equal("42,9.99", dataLine);
+    }
+
+    // ElementToString used element.GetRawText() for decoded numbers, which
+    // reflects the decoder's internal G17-based storage rather than a
+    // clean re-formatted value — decoding the clean TOON text "9.99" and
+    // exporting to CSV produced "9.9900000000000002". Confirmed
+    // empirically before this fix landed.
+    [Fact]
+    public void ToCsv_DecodedDecimalNumber_FormattedCleanlyNotVerbosely()
+    {
+        const string toon = "[1]{id,amount}:\n  1,9.99";
+
+        var csv = ToonCsv.ToCsv(toon);
+
+        Assert.DoesNotContain("9.9900000000000002", csv);
+        var dataLine = csv.Split('\n')[1].Trim('\r');
+        Assert.Equal("1,9.99", dataLine);
     }
 
     [Fact]

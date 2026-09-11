@@ -20,7 +20,8 @@ internal static class ToonDecoder
 
         if (scanResult.Lines.Length == 0)
         {
-            throw new InvalidOperationException("Cannot decode empty input: input must be a non-empty string");
+            // Spec §5: an empty document decodes to an empty object.
+            return JsonDocument.Parse("{}").RootElement;
         }
 
         var cursor = new LineCursor(scanResult.Lines, scanResult.BlankLines);
@@ -41,7 +42,7 @@ internal static class ToonDecoder
         // Check for root array
         if (ToonParser.IsArrayHeaderAfterHyphen(first.Content))
         {
-            var headerInfo = ToonParser.ParseArrayHeaderLine(first.Content, Constants.DefaultDelimiter);
+            var headerInfo = ToonParser.ParseArrayHeaderLine(first.Content, Constants.DefaultDelimiter, options.Strict);
             if (headerInfo != null)
             {
                 cursor.Advance(); // Move past the header line
@@ -116,6 +117,12 @@ internal static class ToonDecoder
             if (line.Depth == computedDepth)
             {
                 var (key, value) = DecodeKeyValuePair(line, cursor, computedDepth.Value, options);
+
+                if (options.Strict)
+                {
+                    ValidationUtils.AssertNoDuplicateKey(properties.ContainsKey(key), key);
+                }
+
                 properties[key] = value;
             }
             else
@@ -145,7 +152,7 @@ internal static class ToonDecoder
     private static (string Key, JsonElement Value, int FollowDepth) DecodeKeyValue(string content, LineCursor cursor, int baseDepth, DecodeOptions options)
     {
         // Check for array header first (before parsing key)
-        var arrayHeader = ToonParser.ParseArrayHeaderLine(content, Constants.DefaultDelimiter);
+        var arrayHeader = ToonParser.ParseArrayHeaderLine(content, Constants.DefaultDelimiter, options.Strict);
         if (arrayHeader != null && arrayHeader.Header.Key != null)
         {
             var value = DecodeArrayFromHeader(arrayHeader.Header, arrayHeader.InlineValues, cursor, baseDepth, options);
@@ -194,10 +201,7 @@ internal static class ToonDecoder
     /// </summary>
     private static JsonElement DecodeArrayFromHeader(ArrayHeaderInfo header, JsonElement[]? inlineValues, LineCursor cursor, int baseDepth, DecodeOptions options)
     {
-        if (options.Strict)
-        {
-            ValidationUtils.ValidateNoBlankLinesInRange(cursor.BlankLines.ToList(), cursor.Current()?.LineNumber ?? 1, cursor.Peek()?.LineNumber ?? int.MaxValue);
-        }
+        int startLine = cursor.Current()?.LineNumber ?? 1;
 
         // Handle inline values
         if (inlineValues != null)
@@ -206,7 +210,7 @@ internal static class ToonDecoder
             {
                 ValidationUtils.AssertExpectedCount(header.Length, inlineValues.Length, "inline values");
             }
-            
+
             return JsonDocument.Parse(JsonSerializer.Serialize(inlineValues)).RootElement;
         }
 
@@ -217,13 +221,21 @@ internal static class ToonDecoder
         }
 
         // Handle tabular arrays (with fields)
-        if (header.Fields != null)
+        JsonElement result = header.Fields != null
+            ? DecodeTabularArray(header, cursor, baseDepth, options)
+            : DecodeListArray(header, cursor, baseDepth, options);
+
+        if (options.Strict)
         {
-            return DecodeTabularArray(header, cursor, baseDepth, options);
+            // Spec §12: a blank line ANYWHERE inside the array's row/item
+            // range is a strict-mode error, not just between the header
+            // and the first row — validate over the full span now
+            // consumed rather than just that initial gap.
+            int endLine = cursor.Current()?.LineNumber ?? int.MaxValue;
+            ValidationUtils.ValidateNoBlankLinesInRange(cursor.BlankLines.ToList(), startLine, endLine);
         }
 
-        // Handle list arrays
-        return DecodeListArray(header, cursor, baseDepth, options);
+        return result;
     }
 
     /// <summary>
@@ -301,8 +313,9 @@ internal static class ToonDecoder
                 // Check for nested object or array
                 if (ToonParser.IsArrayHeaderAfterHyphen(itemContent))
                 {
-                    // Use the parent array's delimiter as the default for nested arrays
-                    var nestedHeader = ToonParser.ParseArrayHeaderLine(itemContent, header.Delimiter);
+                    // Spec §6: absence of a delimiter suffix means comma,
+                    // never inherited from the parent array's delimiter.
+                    var nestedHeader = ToonParser.ParseArrayHeaderLine(itemContent, Constants.DefaultDelimiter, options.Strict);
                     if (nestedHeader != null)
                     {
                         var nestedArray = DecodeArrayFromHeader(nestedHeader.Header, nestedHeader.InlineValues, cursor, expectedDepth, options);
@@ -313,10 +326,29 @@ internal static class ToonDecoder
                 
                 if (ToonParser.IsObjectFirstFieldAfterHyphen(itemContent))
                 {
-                    // Object starting on this line
-                    var result = DecodeKeyValue(itemContent, cursor, expectedDepth, options);
-                    var objDict = new Dictionary<string, JsonElement> { [result.Key] = result.Value };
-                    
+                    // Object starting on this line. A tabular array as the
+                    // first field is special-cased per spec §10: its rows
+                    // sit at hyphenDepth+2, not hyphenDepth+1, so they don't
+                    // collide with this object's remaining fields (read
+                    // below at expectedDepth+1).
+                    var firstFieldHeader = ToonParser.ParseArrayHeaderLine(itemContent, Constants.DefaultDelimiter, options.Strict);
+                    string key;
+                    JsonElement value;
+
+                    if (firstFieldHeader != null && firstFieldHeader.Header.Key != null && firstFieldHeader.Header.Fields != null)
+                    {
+                        key = firstFieldHeader.Header.Key;
+                        value = DecodeArrayFromHeader(firstFieldHeader.Header, firstFieldHeader.InlineValues, cursor, expectedDepth + 1, options);
+                    }
+                    else
+                    {
+                        var result = DecodeKeyValue(itemContent, cursor, expectedDepth, options);
+                        key = result.Key;
+                        value = result.Value;
+                    }
+
+                    var objDict = new Dictionary<string, JsonElement> { [key] = value };
+
                     // Check for more properties at the same depth
                     while (cursor.HasMoreAtDepth(expectedDepth + 1))
                     {

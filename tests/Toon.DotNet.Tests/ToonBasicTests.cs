@@ -125,10 +125,10 @@ public class ToonBasicTests
     }
 
     [Fact]
-    public void Decode_EmptyInput_ThrowsArgumentException()
+    public void Decode_NullInput_ThrowsArgumentException()
     {
-        // Act & Assert
-        Assert.Throws<ArgumentException>(() => Toon.Decode(""));
+        // Empty string is spec-valid (§5: empty document decodes to {}) —
+        // see ToonV3ComplianceTests.Decode_EmptyString_ReturnsEmptyObject.
         Assert.Throws<ArgumentException>(() => Toon.Decode((string)null!));
     }
 

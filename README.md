@@ -1,4 +1,4 @@
-# Toon.DotNet
+# Toon.DotNet - Versions 3.3.2
 ---
 
 
@@ -22,7 +22,7 @@ Token-Oriented Object Notation (TOON) Serializer — a compact, human-readable s
 - Direct JSON-to-TOON and TOON-to-JSON conversion methods for seamless interoperability.
 - Synchronous and **async** file operations for reading and writing TOON and JSON data.
 - **Stream support** — encode to and decode from any `Stream`, sync and async, all targets.
-- 446 Unit tests with > 89% coverage. 100% passing.
+- 681 unit tests. 100% passing.
 - Examples included. 
 
 ---
@@ -55,6 +55,11 @@ dotnet add package Toon.DotNet
 - .Net Standard 2.0 (.NET Framework 4.6.1+, Mono and Unity)
 
 ---
+## Spec compliance
+
+**As of `3.3.2`, this package's version number tracks the [TOON specification](https://github.com/toon-format/spec) version it implements** — see [Versioning](#versioning) below. A full compliance audit against spec v3.0.x–v3.3.2 found 21 gaps (correctness, interop, and spec-purity) — **all 21 are now fixed**, which is what brought the core library into full v3.3.2 conformance. See [`TOON_V3.md`](./TOON_V3.md) for the audit and the fixes. TOON spec v4.0+ features (comments, keyed-tabular objects, nested field groups, and more) are not yet implemented — see [`TOON_V4.md`](./TOON_V4.md) for the tracked gap list; the package version will move to the v4.x line once that work lands.
+
+---
 ## Quick start
 
 ```csharp
@@ -70,8 +75,8 @@ var data = new {
 // Encode to TOON
 string toon = Toon.Encode(data);
 // users[2]{id,name,role}:
-//1,Alice,admin
-//2,Bob,user
+//   1,Alice,admin
+//   2,Bob,user
 
 // Decode to JsonElement
 var json = Toon.Decode(toon);
@@ -280,16 +285,15 @@ var data = new[] {
 // encode with custom options
 var encodeOptions = new EncodeOptions {  Indent = 2, Delimiter = '|' };
 var toon = Toon.Encode(data, encodeOptions);
-// => id|name|role
-//   -+----+------+
-//    1|Alice|admin |
-//    2| Bob | user |
-//    3|Charlie| user |
-//    4| Dana |admin |
+// [4|]{id,name,role}:
+//   1|Alice|admin
+//   2|Bob|user
+//   3|Charlie|user
+//   4|Dana|admin
 
 // get size comparison percentage
 var pct = Toon.SizeComparisonPercentage(data, encodeOptions);
-// ⇒ 28.57 (TOON is ~28.57% smaller than JSON for this data)
+// ⇒ 48.05 (the TOON output is ~48% of the equivalent JSON size)
 
 ```
 ---
@@ -313,12 +317,12 @@ Depending on the target framework, the following dependencies are used:
 ---
 ## Samples
 
-See `examples/ToonFormat.Example` for a runnable console sample.
+See `examples/Toon.DotNet.Example` for a runnable console sample (core encode/decode plus `Toon.DotNet.Excel` usage).
 
 ---
 ## Versioning
 
-This project follows semantic versioning. See [`CHANGELOG.md`](./CHANGELOG.md) for release notes.
+As of `3.3.2`, the core **Toon.DotNet** package's version number tracks the [TOON specification](https://github.com/toon-format/spec) version it implements, rather than semantic versioning against its own release history — `3.3.2` means "conforms to TOON spec v3.3.2." Compatibility-relevant changes are still called out explicitly in each release's notes, since the version number itself doesn't signal API stability the way semver does. The **Toon.DotNet.CSV** and **Toon.DotNet.Excel** integration packages are not implementations of the spec and continue to follow ordinary semantic versioning. See [`CHANGELOG.md`](./CHANGELOG.md) for release notes and the full versioning rationale.
 
 ---
 ## Contributing

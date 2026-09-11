@@ -26,7 +26,7 @@ internal static class Primitives
     /// <returns>The encoded key name.</returns>
     public static string EncodeKey(string key)
     {
-        return StringUtils.EscapeString(key);
+        return StringUtils.EscapeKey(key);
     }
 
     /// <summary>

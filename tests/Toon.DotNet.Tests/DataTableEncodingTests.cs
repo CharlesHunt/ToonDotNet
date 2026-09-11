@@ -249,7 +249,12 @@ public class DataTableEncodingTests
         var result = Toon.Encode(table);
 
         // Assert
-        Assert.Contains("{user id,full name}", result);
+        // Spec §7.3: an unquoted key/field name must match
+        // ^[A-Za-z_][A-Za-z0-9_.]*$ — a name containing a space doesn't,
+        // so it must be quoted. The test's own name ("EscapesColumnNames")
+        // already asserted this intent; the assertion previously checked
+        // for the unescaped form instead.
+        Assert.Contains("{\"user id\",\"full name\"}", result);
     }
 
     [Fact]

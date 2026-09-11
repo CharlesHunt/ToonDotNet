@@ -150,6 +150,20 @@ internal static class ToonScanner
         for (int i = 0; i < lines.Length; i++)
         {
             string raw = lines[i];
+
+            // Spec §1.2: normalize CRLF line endings deliberately at the
+            // scanner boundary, rather than relying on scattered
+            // downstream .Trim() calls to incidentally strip a trailing
+            // \r left over from splitting only on \n.
+            if (raw.Length > 0 && raw[raw.Length - 1] == Constants.CarriageReturn)
+            {
+#if NETSTANDARD2_0
+                raw = raw.Substring(0, raw.Length - 1);
+#else
+                raw = raw[..^1];
+#endif
+            }
+
             int lineNumber = i + 1;
             int indent = 0;
             
