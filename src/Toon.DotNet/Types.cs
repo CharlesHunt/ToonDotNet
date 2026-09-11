@@ -3,6 +3,24 @@ using System.Text.Json;
 namespace ToonFormat;
 
 /// <summary>
+/// The TOON grammar variant to target. See TOON_V4.md for the v4.0.0+
+/// feature/behavior gap list this drives.
+/// </summary>
+public enum ToonSpecVersion
+{
+    /// <summary>
+    /// TOON spec v3.x (the line this library fully conforms to as of
+    /// <see cref="Constants.SpecVersion"/>).
+    /// </summary>
+    V3,
+
+    /// <summary>
+    /// TOON spec v4.0.0+. Not yet implemented — see TOON_V4.md.
+    /// </summary>
+    V4
+}
+
+/// <summary>
 /// Configuration options for encoding values to TOON format.
 /// </summary>
 public class EncodeOptions
@@ -22,6 +40,18 @@ public class EncodeOptions
     /// When set to '#', arrays render as [#N] instead of [N].
     /// </summary>
     public char? LengthMarker { get; set; }
+
+    /// <summary>
+    /// The TOON grammar variant to encode. Currently has no effect — v4
+    /// output support (keyed tabular form, nested field groups) is not
+    /// yet implemented (see TOON_V4.md). Reserved so later work has a
+    /// stable place to gate v4-only output without a breaking API change;
+    /// the default will move to <see cref="ToonSpecVersion.V4"/> once
+    /// that support lands, which will itself be a documented behavior
+    /// change (see TOON_V4.md's "Version-aware EncodeOptions /
+    /// DecodeOptions" section).
+    /// </summary>
+    public ToonSpecVersion SpecVersion { get; set; } = ToonSpecVersion.V3;
 }
 
 /// <summary>
@@ -38,6 +68,43 @@ public class DecodeOptions
     /// When true, enforce strict validation of array lengths and tabular row counts.
     /// </summary>
     public bool Strict { get; set; } = true;
+
+    /// <summary>
+    /// Currently has no effect — reserved for the small set of TOON v4
+    /// semantic changes that genuinely conflict with v3 behavior for the
+    /// same input (token trimming scope, leading-plus numeric-like
+    /// quoting, and the v4.1 misplaced-scalar rule), none of which are
+    /// implemented yet. The decoder does not use a version selector to
+    /// decide what grammar it understands — see TOON_V4.md's "superset
+    /// grammar, not per-version detection" section — this flag exists
+    /// only to opt back into the old lenient behavior for that narrow set
+    /// of conflicts once they're implemented, defaulting to correct v4
+    /// behavior.
+    /// </summary>
+    public bool LegacyCompatibility { get; set; } = false;
+}
+
+/// <summary>
+/// A field in a tabular header (spec §9.3 arrays-of-objects, §9.5
+/// keyed-object tables). A leaf field (<see cref="Children"/> null or
+/// empty) maps directly to one row cell. A field with children is a
+/// nested field group (v4.0.0 RFC #46, e.g. <c>customer{name,country}</c>)
+/// whose row cells are the depth-first, pre-order walk of its own
+/// children — recursively, so nesting depth is unbounded per spec.
+/// </summary>
+internal class TabularField
+{
+#if NETSTANDARD2_0
+    public string Name { get; set; }
+#else
+    public required string Name { get; set; }
+#endif
+
+    /// <summary>
+    /// Null (or empty) for a leaf field; the nested field list for a
+    /// nested field group.
+    /// </summary>
+    public TabularField[]? Children { get; set; }
 }
 
 /// <summary>
@@ -61,14 +128,24 @@ internal class ArrayHeaderInfo
     public char Delimiter { get; set; }
 
     /// <summary>
-    /// Field names for tabular arrays (if any).
+    /// Field list for tabular arrays (if any), including any nested
+    /// field groups (spec §9.3, v4.0.0 RFC #46).
     /// </summary>
-    public string[]? Fields { get; set; }
+    public TabularField[]? Fields { get; set; }
 
     /// <summary>
     /// Whether the array header includes a length marker (#).
     /// </summary>
     public bool HasLengthMarker { get; set; }
+
+    /// <summary>
+    /// True when the bracket segment used the keyed-tabular grammar
+    /// (spec §6 keyed-seg, v4.0.0 RFC #57: "[" length ":" [delimsym] "]"),
+    /// e.g. "users[2:]{age,city}:". A keyed-tabular header decodes to an
+    /// <em>object</em> whose entries carry their own keys (§9.5), not an
+    /// array — despite reusing the same bracket/braces header shape.
+    /// </summary>
+    public bool IsKeyedTabular { get; set; }
 }
 
 /// <summary>

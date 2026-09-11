@@ -39,14 +39,18 @@ internal static class ToonDecoder
             throw new InvalidOperationException("No content to decode");
         }
 
-        // Check for root array
+        // Check for root array (or root keyed-tabular object, spec §9.5,
+        // which reuses the same "[...]{...}:" header shape but decodes
+        // to an object rather than an array).
         if (ToonParser.IsArrayHeaderAfterHyphen(first.Content))
         {
             var headerInfo = ToonParser.ParseArrayHeaderLine(first.Content, Constants.DefaultDelimiter, options.Strict);
             if (headerInfo != null)
             {
                 cursor.Advance(); // Move past the header line
-                return DecodeArrayFromHeader(headerInfo.Header, headerInfo.InlineValues, cursor, 0, options);
+                return headerInfo.Header.IsKeyedTabular
+                    ? DecodeKeyedTabularObject(headerInfo.Header, cursor, 0, options)
+                    : DecodeArrayFromHeader(headerInfo.Header, headerInfo.InlineValues, cursor, 0, options);
             }
         }
 
@@ -151,12 +155,16 @@ internal static class ToonDecoder
     /// </summary>
     private static (string Key, JsonElement Value, int FollowDepth) DecodeKeyValue(string content, LineCursor cursor, int baseDepth, DecodeOptions options)
     {
-        // Check for array header first (before parsing key)
+        // Check for array header first (before parsing key). Also covers
+        // a keyed-tabular field header (spec §9.5), which reuses the same
+        // header shape but decodes to an object, not an array.
         var arrayHeader = ToonParser.ParseArrayHeaderLine(content, Constants.DefaultDelimiter, options.Strict);
         if (arrayHeader != null && arrayHeader.Header.Key != null)
         {
-            var value = DecodeArrayFromHeader(arrayHeader.Header, arrayHeader.InlineValues, cursor, baseDepth, options);
-            // After an array, subsequent fields are at baseDepth + 1 (where array content is)
+            var value = arrayHeader.Header.IsKeyedTabular
+                ? DecodeKeyedTabularObject(arrayHeader.Header, cursor, baseDepth, options)
+                : DecodeArrayFromHeader(arrayHeader.Header, arrayHeader.InlineValues, cursor, baseDepth, options);
+            // After the field, subsequent sibling fields are at baseDepth + 1 (where this field's content is)
             return (arrayHeader.Header.Key, value, baseDepth + 1);
         }
 
@@ -239,12 +247,93 @@ internal static class ToonDecoder
     }
 
     /// <summary>
+    /// Decodes a keyed-tabular object (spec §9.5, v4.0.0 RFC #57): a
+    /// header using the keyed-seg bracket grammar ("[N:delim?]{fields}:")
+    /// whose entry rows each carry their own key, unlike a positional
+    /// tabular array (§9.3). Reuses <see cref="BuildTabularRowElement"/>
+    /// for the per-entry cell-to-field walk, since an entry row's value
+    /// portion decodes exactly like a §9.3 tabular row.
+    /// </summary>
+    private static JsonElement DecodeKeyedTabularObject(ArrayHeaderInfo header, LineCursor cursor, int baseDepth, DecodeOptions options)
+    {
+        int startLine = cursor.Current()?.LineNumber ?? 1;
+
+        if (header.Length == 0)
+        {
+            return JsonDocument.Parse("{}").RootElement;
+        }
+
+        var entries = new Dictionary<string, JsonElement>();
+        int expectedDepth = baseDepth + 1;
+        int leafFieldCount = CountLeafFields(header.Fields!);
+
+        while (cursor.HasMoreAtDepth(expectedDepth))
+        {
+            var line = cursor.PeekAtDepth(expectedDepth);
+            if (line == null)
+                break;
+
+            // Spec §9.5 (authoritative line classification at entry
+            // depth): every line at entry depth containing an unquoted
+            // colon is an entry row. Unlike §9.3 tabular rows, the
+            // colon-before-delimiter disambiguation does NOT apply — a
+            // keyed scope ends only on depth decrease or end of input.
+            if (!ToonParser.HasUnquotedColon(line.Content))
+            {
+                if (options.Strict)
+                {
+                    throw new InvalidOperationException($"Line {line.LineNumber}: expected a keyed tabular entry row (\"key: values\")");
+                }
+
+                cursor.Advance();
+                continue;
+            }
+
+            cursor.Advance();
+
+            var keyResult = ToonParser.ParseKeyToken(line.Content, 0);
+#if NETSTANDARD2_0
+            string cellsContent = line.Content.Substring(keyResult.End).Trim();
+#else
+            string cellsContent = line.Content[keyResult.End..].Trim();
+#endif
+
+            var values = ToonParser.ParseDelimitedValues(cellsContent, header.Delimiter);
+            var primitives = ToonParser.MapRowValuesToPrimitives(values);
+
+            // Spec §9.5: strict mode MUST enforce each entry row's cell
+            // count equals the leaf-field count.
+            if (options.Strict)
+            {
+                ValidationUtils.AssertExpectedCount(leafFieldCount, primitives.Length, "keyed tabular entry cells");
+                ValidationUtils.AssertNoDuplicateKey(entries.ContainsKey(keyResult.Key), keyResult.Key);
+            }
+
+            int cellIndex = 0;
+            entries[keyResult.Key] = BuildTabularRowElement(header.Fields!, primitives, ref cellIndex);
+        }
+
+        if (options.Strict)
+        {
+            // Spec §9.5: strict mode MUST enforce the entry-row count
+            // equals the declared entry count N.
+            ValidationUtils.AssertExpectedCount(header.Length, entries.Count, "keyed tabular entries");
+
+            int endLine = cursor.Current()?.LineNumber ?? int.MaxValue;
+            ValidationUtils.ValidateNoBlankLinesInRange(cursor.BlankLines.ToList(), startLine, endLine);
+        }
+
+        return JsonDocument.Parse(JsonSerializer.Serialize(entries)).RootElement;
+    }
+
+    /// <summary>
     /// Decodes a tabular array.
     /// </summary>
     private static JsonElement DecodeTabularArray(ArrayHeaderInfo header, LineCursor cursor, int baseDepth, DecodeOptions options)
     {
-        var rows = new List<Dictionary<string, JsonElement>>();
+        var rows = new List<JsonElement>();
         int expectedDepth = baseDepth + 1;
+        int leafFieldCount = CountLeafFields(header.Fields!);
 
         for (int i = 0; i < header.Length; i++)
         {
@@ -259,17 +348,21 @@ internal static class ToonDecoder
             }
 
             cursor.Advance();
-            
+
             var values = ToonParser.ParseDelimitedValues(line.Content, header.Delimiter);
             var primitives = ToonParser.MapRowValuesToPrimitives(values);
 
-            var row = new Dictionary<string, JsonElement>();
-            for (int j = 0; j < header.Fields!.Length && j < primitives.Length; j++)
+            // Spec §9.3: in strict mode, each row's cell count MUST equal
+            // the header's leaf-field count (the depth-first, pre-order
+            // count across any nested field groups, not just the
+            // top-level field count).
+            if (options.Strict)
             {
-                row[header.Fields[j]] = primitives[j];
+                ValidationUtils.AssertExpectedCount(leafFieldCount, primitives.Length, "tabular row cells");
             }
 
-            rows.Add(row);
+            int cellIndex = 0;
+            rows.Add(BuildTabularRowElement(header.Fields!, primitives, ref cellIndex));
         }
 
         if (options.Strict)
@@ -278,6 +371,50 @@ internal static class ToonDecoder
         }
 
         return JsonDocument.Parse(JsonSerializer.Serialize(rows)).RootElement;
+    }
+
+    /// <summary>
+    /// Counts the leaf fields in a tabular field list, walking any nested
+    /// field groups (spec §9.3, v4.0.0 RFC #46) depth-first.
+    /// </summary>
+    private static int CountLeafFields(TabularField[] fields)
+    {
+        int count = 0;
+        foreach (var field in fields)
+        {
+            count += field.Children == null || field.Children.Length == 0
+                ? 1
+                : CountLeafFields(field.Children);
+        }
+        return count;
+    }
+
+    /// <summary>
+    /// Builds one decoded tabular row by walking the field list
+    /// depth-first, pre-order: a leaf field consumes the next cell, and a
+    /// nested field group materializes a nested object from its own
+    /// subfields, applied recursively (spec §9.3).
+    /// </summary>
+    private static JsonElement BuildTabularRowElement(TabularField[] fields, JsonElement[] cells, ref int cellIndex)
+    {
+        var row = new Dictionary<string, JsonElement>();
+
+        foreach (var field in fields)
+        {
+            if (field.Children == null || field.Children.Length == 0)
+            {
+                row[field.Name] = cellIndex < cells.Length
+                    ? cells[cellIndex]
+                    : JsonDocument.Parse("null").RootElement;
+                cellIndex++;
+            }
+            else
+            {
+                row[field.Name] = BuildTabularRowElement(field.Children, cells, ref cellIndex);
+            }
+        }
+
+        return JsonDocument.Parse(JsonSerializer.Serialize(row)).RootElement;
     }
 
     /// <summary>

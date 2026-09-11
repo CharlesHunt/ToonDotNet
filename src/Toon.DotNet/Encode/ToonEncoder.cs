@@ -26,12 +26,22 @@ internal static class ToonEncoder
         if (Normalizer.IsJsonArray(value))
         {
             var keys = value.EnumerateArray().ToArray();
-               
+
             EncodeArray(null, value, writer, 0, options);
         }
         else if (Normalizer.IsJsonObject(value))
         {
-            EncodeObject(value, writer, 0, options);
+            // Spec §9.5 (v4.0.0 RFC #57): encoders MUST use keyed tabular
+            // form for a root object of uniform objects.
+            var keyedFields = ExtractKeyedTabularHeader(value, out var rootEntries);
+            if (keyedFields != null)
+            {
+                EncodeObjectAsKeyedTabular(null, rootEntries, keyedFields, writer, 0, options);
+            }
+            else
+            {
+                EncodeObject(value, writer, 0, options);
+            }
         }
 
         return writer.ToString();
@@ -73,9 +83,83 @@ internal static class ToonEncoder
             }
             else
             {
-                writer.Push(depth, $"{encodedKey}:");
-                EncodeObject(value, writer, depth + 1, options);
+                // Spec §9.5 (v4.0.0 RFC #57): encoders MUST use keyed
+                // tabular form for an object-field-position object of
+                // uniform objects (an array element never qualifies —
+                // §10 — so this detection is intentionally not wired
+                // into the list-item encoding paths below).
+                var keyedFields = ExtractKeyedTabularHeader(value, out var entries);
+                if (keyedFields != null)
+                {
+                    EncodeObjectAsKeyedTabular(key, entries, keyedFields, writer, depth, options);
+                }
+                else
+                {
+                    writer.Push(depth, $"{encodedKey}:");
+                    EncodeObject(value, writer, depth + 1, options);
+                }
             }
+        }
+    }
+
+    /// <summary>
+    /// Extracts a keyed-tabular field list (spec §9.5, v4.0.0 RFC #57)
+    /// from an object whose values are all uniform non-empty objects,
+    /// reusing the same column-uniformity logic as array-of-objects
+    /// tabular detection (§9.3). Returns null (and detection doesn't
+    /// apply) when the object has fewer than two entries or its values
+    /// aren't uniform.
+    /// </summary>
+    private static TabularField[]? ExtractKeyedTabularHeader(JsonElement obj, out JsonProperty[] entries)
+    {
+        entries = obj.EnumerateObject().ToArray();
+
+        // Spec §9.5: detection requires at least two entries.
+        if (entries.Length < 2)
+            return null;
+
+        var entryValues = entries.Select(e => e.Value).ToArray();
+        if (!entryValues.All(v => Normalizer.IsJsonObject(v) && v.EnumerateObject().Any()))
+            return null;
+
+        var firstProperties = entryValues[0].EnumerateObject().ToArray();
+        if (firstProperties.Length == 0)
+            return null;
+
+        var fields = new List<TabularField>();
+        foreach (var property in firstProperties)
+        {
+            var field = BuildTabularFieldOrNull(property.Name, entryValues);
+            if (field == null)
+                return null;
+            fields.Add(field);
+        }
+
+        string[] fieldNames = fields.Select(f => f.Name).ToArray();
+        if (!AllRowsHaveExactKeySet(entryValues, fieldNames))
+            return null;
+
+        return fields.ToArray();
+    }
+
+    /// <summary>
+    /// Writes an object as keyed tabular form: a header declaring the
+    /// entry count and field list, followed by one "entrykey: cells" row
+    /// per entry in encounter order (spec §9.5).
+    /// </summary>
+    private static void EncodeObjectAsKeyedTabular(string? key, JsonProperty[] entries, TabularField[] fields, LineWriter writer, int depth, EncodeOptions options)
+    {
+        string header = Primitives.FormatKeyedHeader(entries.Length, key, options.Delimiter, fields);
+        writer.Push(depth, header);
+
+        foreach (var entry in entries)
+        {
+            var values = new List<JsonElement>();
+            CollectTabularRowValues(entry.Value, fields, values);
+
+            string joinedValue = Primitives.EncodeAndJoinPrimitives(values.ToArray(), options.Delimiter);
+            string encodedEntryKey = Primitives.EncodeKey(entry.Name);
+            writer.Push(depth + 1, $"{encodedEntryKey}: {joinedValue}");
         }
     }
 
@@ -153,7 +237,7 @@ internal static class ToonEncoder
     /// <summary>
     /// Encodes an array of objects as a tabular format.
     /// </summary>
-    private static void EncodeArrayOfObjectsAsTabular(string? key, JsonElement[] rows, string[] header, LineWriter writer, int depth, EncodeOptions options)
+    private static void EncodeArrayOfObjectsAsTabular(string? key, JsonElement[] rows, TabularField[] header, LineWriter writer, int depth, EncodeOptions options)
     {
         string formattedHeader = Primitives.FormatHeader(rows.Length, key, options.Delimiter, options.LengthMarker, header);
         writer.Push(depth, formattedHeader);
@@ -162,34 +246,55 @@ internal static class ToonEncoder
     }
 
     /// <summary>
-    /// Writes tabular rows for an array of objects.
+    /// Writes tabular rows for an array of objects, flattening any nested
+    /// field groups (spec §9.3, v4.0.0 RFC #46) via a depth-first,
+    /// pre-order walk of the field list.
     /// </summary>
-    private static void WriteTabularRows(JsonElement[] rows, string[] header, LineWriter writer, int depth, EncodeOptions options)
+    private static void WriteTabularRows(JsonElement[] rows, TabularField[] header, LineWriter writer, int depth, EncodeOptions options)
     {
         foreach (var row in rows)
         {
             var values = new List<JsonElement>();
-            foreach (string key in header)
-            {
-                if (row.TryGetProperty(key, out JsonElement value))
-                {
-                    values.Add(value);
-                }
-                else
-                {
-                    values.Add(JsonDocument.Parse("null").RootElement);
-                }
-            }
-            
+            CollectTabularRowValues(row, header, values);
+
             string joinedValue = Primitives.EncodeAndJoinPrimitives(values.ToArray(), options.Delimiter);
             writer.Push(depth, joinedValue);
         }
     }
 
     /// <summary>
-    /// Extracts tabular header from array of objects if they have uniform structure.
+    /// Appends one row's leaf cell values to <paramref name="values"/> in
+    /// depth-first, pre-order field-list order: a leaf field contributes
+    /// its own value, and a nested field group recurses into its
+    /// subfields' values within the row's nested sub-object.
     /// </summary>
-    private static string[]? ExtractTabularHeader(JsonElement[] rows)
+    private static void CollectTabularRowValues(JsonElement row, TabularField[] fields, List<JsonElement> values)
+    {
+        foreach (var field in fields)
+        {
+            if (field.Children == null || field.Children.Length == 0)
+            {
+                values.Add(row.TryGetProperty(field.Name, out JsonElement value)
+                    ? value
+                    : JsonDocument.Parse("null").RootElement);
+            }
+            else
+            {
+                JsonElement subRow = row.TryGetProperty(field.Name, out JsonElement subValue)
+                    ? subValue
+                    : JsonDocument.Parse("{}").RootElement;
+                CollectTabularRowValues(subRow, field.Children, values);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Extracts a tabular field list (spec §9.3) from an array of objects
+    /// if they have uniform structure, including nested-uniform columns
+    /// as nested field groups (v4.0.0 RFC #46). Returns null if the array
+    /// doesn't qualify for tabular form at all.
+    /// </summary>
+    private static TabularField[]? ExtractTabularHeader(JsonElement[] rows)
     {
         if (rows.Length == 0)
             return null;
@@ -202,20 +307,75 @@ internal static class ToonEncoder
         if (properties.Length == 0)
             return null;
 
-        string[] firstKeys = properties.Select(p => p.Name).ToArray();
-
-        if (IsTabularArray(rows, firstKeys))
+        var fields = new List<TabularField>();
+        foreach (var property in properties)
         {
-            return firstKeys;
+            var field = BuildTabularFieldOrNull(property.Name, rows);
+            if (field == null)
+                return null;
+            fields.Add(field);
         }
 
-        return null;
+        string[] fieldNames = fields.Select(f => f.Name).ToArray();
+        if (!AllRowsHaveExactKeySet(rows, fieldNames))
+            return null;
+
+        return fields.ToArray();
     }
 
     /// <summary>
-    /// Checks if an array of objects can be represented in tabular format.
+    /// Builds the tabular field for one column name, recursively
+    /// descending into nested-uniform object columns as nested field
+    /// groups. Returns null when the column disqualifies the whole array
+    /// from tabular form (spec §9.3: a column that is neither
+    /// uniform-primitive nor nested-uniform).
     /// </summary>
-    private static bool IsTabularArray(JsonElement[] rows, string[] header)
+    private static TabularField? BuildTabularFieldOrNull(string name, JsonElement[] rows)
+    {
+        var columnValues = new JsonElement[rows.Length];
+        for (int i = 0; i < rows.Length; i++)
+        {
+            if (!rows[i].TryGetProperty(name, out JsonElement value))
+                return null;
+            columnValues[i] = value;
+        }
+
+        if (columnValues.All(Normalizer.IsJsonPrimitive))
+        {
+            return new TabularField { Name = name, Children = null };
+        }
+
+        // Nested-uniform: every value is a non-empty object, all with the
+        // same key set, and every sub-column is itself uniform-primitive
+        // or nested-uniform (recursively, unbounded depth).
+        bool allNonEmptyObjects = columnValues.All(v =>
+            Normalizer.IsJsonObject(v) && v.EnumerateObject().Any());
+        if (!allNonEmptyObjects)
+            return null;
+
+        var firstSubProperties = columnValues[0].EnumerateObject().ToArray();
+
+        var subFields = new List<TabularField>();
+        foreach (var subProperty in firstSubProperties)
+        {
+            var subField = BuildTabularFieldOrNull(subProperty.Name, columnValues);
+            if (subField == null)
+                return null;
+            subFields.Add(subField);
+        }
+
+        string[] subFieldNames = subFields.Select(f => f.Name).ToArray();
+        if (!AllRowsHaveExactKeySet(columnValues, subFieldNames))
+            return null;
+
+        return new TabularField { Name = name, Children = subFields.ToArray() };
+    }
+
+    /// <summary>
+    /// Checks that every row is an object with exactly the given set of
+    /// keys (order may vary per row, per spec §9.3).
+    /// </summary>
+    private static bool AllRowsHaveExactKeySet(JsonElement[] rows, string[] keys)
     {
         foreach (var row in rows)
         {
@@ -223,18 +383,12 @@ internal static class ToonEncoder
                 return false;
 
             var properties = row.EnumerateObject().ToArray();
-            
-            // All objects must have the same number of keys
-            if (properties.Length != header.Length)
+            if (properties.Length != keys.Length)
                 return false;
 
-            // Check that all header keys exist in the row and all values are primitives
-            foreach (string key in header)
+            foreach (string key in keys)
             {
-                if (!row.TryGetProperty(key, out JsonElement value))
-                    return false;
-                
-                if (!Normalizer.IsJsonPrimitive(value))
+                if (!row.TryGetProperty(key, out _))
                     return false;
             }
         }

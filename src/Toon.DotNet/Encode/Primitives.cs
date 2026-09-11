@@ -36,10 +36,10 @@ internal static class Primitives
     /// <param name="key">Optional key name.</param>
     /// <param name="delimiter">The delimiter character.</param>
     /// <param name="lengthMarker">Optional length marker character.</param>
-    /// <param name="fields">Optional field names for tabular arrays.</param>
+    /// <param name="fields">Optional tabular field list, including any nested field groups.</param>
     /// <returns>The formatted header string.</returns>
-    public static string FormatHeader(int length, string? key = null, char delimiter = Constants.DefaultDelimiter, 
-        char? lengthMarker = null, string[]? fields = null)
+    public static string FormatHeader(int length, string? key = null, char delimiter = Constants.DefaultDelimiter,
+        char? lengthMarker = null, TabularField[]? fields = null)
     {
         var parts = new List<string>();
 
@@ -51,24 +51,74 @@ internal static class Primitives
 
         // Format length with optional marker and delimiter suffix
         string lengthPart = lengthMarker.HasValue ? $"{lengthMarker}{length}" : length.ToString();
-        
+
         // Add delimiter suffix if not default
         string delimiterSuffix = "";
         if (delimiter != Constants.DefaultDelimiter)
         {
             delimiterSuffix = delimiter.ToString();
         }
-        
+
         parts.Add($"[{lengthPart}{delimiterSuffix}]");
 
-        // Add fields if present
+        // Add fields if present, expanding nested field groups (v4.0.0
+        // RFC #46) recursively, e.g. "customer{name,country}".
         if (fields != null && fields.Length > 0)
         {
-            string fieldList = string.Join(",", fields.Select(EncodeKey));
-            parts.Add($"{{{fieldList}}}");
+            parts.Add($"{{{FormatFieldList(fields)}}}");
         }
 
         return string.Join("", parts) + ":";
+    }
+
+    /// <summary>
+    /// Formats a keyed-tabular header (spec §6 keyed-seg grammar,
+    /// v4.0.0 RFC #57): "key[N:delim?]{fields}:" — note the literal
+    /// colon inside the bracket segment, which distinguishes this from a
+    /// plain array header and has no length-marker counterpart.
+    /// </summary>
+    /// <param name="entryCount">The object's entry count (N).</param>
+    /// <param name="key">Optional key name (omitted at the document root).</param>
+    /// <param name="delimiter">The delimiter character.</param>
+    /// <param name="fields">The (required) field list, including any nested field groups.</param>
+    public static string FormatKeyedHeader(int entryCount, string? key, char delimiter, TabularField[] fields)
+    {
+        var parts = new List<string>();
+
+        if (!string.IsNullOrEmpty(key))
+        {
+            parts.Add(EncodeKey(key));
+        }
+
+        string delimiterSuffix = delimiter != Constants.DefaultDelimiter ? delimiter.ToString() : "";
+        parts.Add($"[{entryCount}:{delimiterSuffix}]");
+        parts.Add($"{{{FormatFieldList(fields)}}}");
+
+        return string.Join("", parts) + ":";
+    }
+
+    /// <summary>
+    /// Formats a tabular field list, rendering nested field groups
+    /// recursively.
+    /// </summary>
+    private static string FormatFieldList(TabularField[] fields)
+    {
+        return string.Join(",", fields.Select(FormatField));
+    }
+
+    /// <summary>
+    /// Formats one field: a bare name for a leaf field, or
+    /// "name{child,child,...}" for a nested field group.
+    /// </summary>
+    private static string FormatField(TabularField field)
+    {
+        string name = EncodeKey(field.Name);
+        if (field.Children == null || field.Children.Length == 0)
+        {
+            return name;
+        }
+
+        return $"{name}{{{FormatFieldList(field.Children)}}}";
     }
 
     /// <summary>

@@ -115,7 +115,6 @@ Implemented in `ToonAsync.cs`. Guarded by `#if !NETSTANDARD2_0`. Validates `tabl
 | Property | Type | Description |
 |----------|------|-------------|
 | `MaxDepth` | `int` | Guards against deeply-nested or adversarial input. |
-| `AllowComments` | `bool` | Treat lines starting with `#` as comments and ignore them during parsing. |
 | `AllowTrailingDelimiters` | `bool` | Tolerate a trailing delimiter at the end of a tabular row (common in hand-edited files). |
 
 ---

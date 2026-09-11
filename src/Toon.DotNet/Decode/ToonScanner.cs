@@ -178,6 +178,18 @@ internal static class ToonScanner
             string content = raw[indent..];
 #endif
 
+            // Spec §5.1: a comment line is a line whose first character
+            // after zero or more leading spaces is '#' (tabs cannot
+            // precede it, which the space-only indent scan above already
+            // guarantees). Decoders MUST remove comment lines in a
+            // lexical pre-pass, in strict and non-strict mode alike, so
+            // they are dropped here entirely rather than tracked as
+            // parsed or blank lines.
+            if (content.Length > 0 && content[0] == Constants.Hash)
+            {
+                continue;
+            }
+
             // Track blank lines
             if (string.IsNullOrWhiteSpace(content))
             {

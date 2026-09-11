@@ -435,8 +435,8 @@ public class ToonParserTests
         Assert.Equal(2, result.Header.Length);
         Assert.NotNull(result.Header.Fields);
         Assert.Equal(2, result.Header.Fields.Length);
-        Assert.Equal("id", result.Header.Fields[0]);
-        Assert.Equal("name", result.Header.Fields[1]);
+        Assert.Equal("id", result.Header.Fields[0].Name);
+        Assert.Equal("name", result.Header.Fields[1].Name);
     }
 
     [Fact]
@@ -617,8 +617,8 @@ public class ToonParserTests
 
         // Assert
         Assert.NotNull(result);
-        Assert.Equal("first name", result.Header.Fields![0]);
-        Assert.Equal("last name", result.Header.Fields[1]);
+        Assert.Equal("first name", result.Header.Fields![0].Name);
+        Assert.Equal("last name", result.Header.Fields[1].Name);
     }
 
     [Fact]

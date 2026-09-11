@@ -354,9 +354,13 @@ public class ToonEncoderTests
     }
 
     [Fact]
-    public void Encode_ArrayOfObjectsWithNestedValues_ReturnsListFormat()
+    public void Encode_ArrayOfObjectsWithNestedValues_ReturnsNestedFieldGroupTabularFormat()
     {
-        // Arrange - Objects with non-primitive values
+        // Arrange - Objects whose only non-primitive column is
+        // nested-uniform (spec §9.3, v4.0.0 RFC #46): every "details" is
+        // a non-empty object with the same keys, so the array still
+        // qualifies for tabular form via a nested field group rather
+        // than falling back to list form.
         var data = new[]
         {
             new { id = 1, details = new { age = 30 } },
@@ -367,8 +371,9 @@ public class ToonEncoderTests
         var result = Toon.Encode(data);
 
         // Assert
-        Assert.Contains("[2]:", result);
-        Assert.Contains("- id: 1", result);
+        Assert.Contains("[2]{id,details{age}}:", result);
+        Assert.Contains("1,30", result);
+        Assert.Contains("2,25", result);
     }
 
     [Fact]
@@ -402,9 +407,13 @@ public class ToonEncoderTests
     }
 
     [Fact]
-    public void Encode_ListItemWithNestedObject_ReturnsNestedStructure()
+    public void Encode_ListItemWithNestedObject_ReturnsNestedFieldGroupTabularFormat()
     {
-        // Arrange
+        // Arrange - a single-element array of objects still qualifies
+        // for tabular form (spec §9.3 has no minimum row count, unlike
+        // §9.5's keyed tabular form); "person" is a nested-uniform
+        // column (v4.0.0 RFC #46), so it becomes a nested field group
+        // rather than the old list-item fallback.
         var data = new[]
         {
             new { id = 1, person = new { name = "Alice" } }
@@ -414,9 +423,8 @@ public class ToonEncoderTests
         var result = Toon.Encode(data);
 
         // Assert
-        Assert.Contains("- id: 1", result);
-        Assert.Contains("  person:", result);
-        Assert.Contains("    name: Alice", result);
+        Assert.Contains("[1]{id,person{name}}:", result);
+        Assert.Contains("1,Alice", result);
     }
 
     [Fact]
