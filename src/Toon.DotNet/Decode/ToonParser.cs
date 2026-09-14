@@ -15,8 +15,9 @@ internal static class ToonParser
     /// <param name="content">The line content to parse.</param>
     /// <param name="defaultDelimiter">The default delimiter to use.</param>
     /// <param name="strict">When true (default), a malformed bracket segment throws. When false, spec §14.2 permits falling through to key-value parsing instead (returns null).</param>
+    /// <param name="legacyCompatibility">When true, extracted tokens (key, value, field names) are trimmed with the pre-v4 broader-whitespace rule instead of spec §12's U+0020-only rule.</param>
     /// <returns>Parsed header information and inline values, or null if not a valid header.</returns>
-    public static ArrayHeaderParseResult? ParseArrayHeaderLine(string content, char defaultDelimiter, bool strict = true)
+    public static ArrayHeaderParseResult? ParseArrayHeaderLine(string content, char defaultDelimiter, bool strict = true, bool legacyCompatibility = false)
     {
         string trimmed = content.TrimStart();
 
@@ -90,19 +91,19 @@ internal static class ToonParser
         if (bracketStart > 0)
         {
 #if NETSTANDARD2_0
-            string rawKey = content.Substring(0, bracketStart).Trim();
-            key = rawKey.StartsWith(Constants.DoubleQuote.ToString()) ? ParseStringLiteral(rawKey) : rawKey;
+            string rawKey = StringUtils.TrimToken(content.Substring(0, bracketStart), legacyCompatibility);
+            key = rawKey.StartsWith(Constants.DoubleQuote.ToString()) ? ParseStringLiteral(rawKey, legacyCompatibility) : rawKey;
 #else
-            string rawKey = content[..bracketStart].Trim();
-            key = rawKey.StartsWith(Constants.DoubleQuote) ? ParseStringLiteral(rawKey) : rawKey;
+            string rawKey = StringUtils.TrimToken(content[..bracketStart], legacyCompatibility);
+            key = rawKey.StartsWith(Constants.DoubleQuote) ? ParseStringLiteral(rawKey, legacyCompatibility) : rawKey;
 #endif
         }
 
 #if NETSTANDARD2_0
-    string afterColon = content.Substring(colonIndex + 1).Trim();
+    string afterColon = StringUtils.TrimToken(content.Substring(colonIndex + 1), legacyCompatibility);
     string bracketContent = content.Substring(bracketStart + 1, bracketEnd - (bracketStart + 1));
 #else
-    string afterColon = content[(colonIndex + 1)..].Trim();
+    string afterColon = StringUtils.TrimToken(content[(colonIndex + 1)..], legacyCompatibility);
     string bracketContent = content[(bracketStart + 1)..bracketEnd];
 #endif
 
@@ -116,13 +117,13 @@ internal static class ToonParser
         BracketParseResult parsedBracket;
         if (strict)
         {
-            parsedBracket = ParseBracketSegment(bracketContent, defaultDelimiter);
+            parsedBracket = ParseBracketSegment(bracketContent, defaultDelimiter, legacyCompatibility);
         }
         else
         {
             try
             {
-                parsedBracket = ParseBracketSegment(bracketContent, defaultDelimiter);
+                parsedBracket = ParseBracketSegment(bracketContent, defaultDelimiter, legacyCompatibility);
             }
             catch (InvalidOperationException)
             {
@@ -145,7 +146,7 @@ internal static class ToonParser
                 // Fields are always comma-delimited, regardless of the
                 // data delimiter, and may contain nested field groups
                 // (v4.0.0 RFC #46).
-                fields = ParseFieldList(fieldsContent);
+                fields = ParseFieldList(fieldsContent, legacyCompatibility);
             }
         }
 
@@ -176,7 +177,7 @@ internal static class ToonParser
         JsonElement[]? inlineValues = null;
         if (!string.IsNullOrWhiteSpace(afterColon))
         {
-            var valueStrings = ParseDelimitedValues(afterColon, parsedBracket.Delimiter);
+            var valueStrings = ParseDelimitedValues(afterColon, parsedBracket.Delimiter, legacyCompatibility);
             inlineValues = MapRowValuesToPrimitives(valueStrings);
         }
 
@@ -208,7 +209,7 @@ internal static class ToonParser
     /// <summary>
     /// Parses a bracket segment to extract length, delimiter, and length marker information.
     /// </summary>
-    private static BracketParseResult ParseBracketSegment(string seg, char defaultDelimiter)
+    private static BracketParseResult ParseBracketSegment(string seg, char defaultDelimiter, bool legacyCompatibility)
     {
         bool hasLengthMarker = false;
         string content = seg;
@@ -258,11 +259,12 @@ internal static class ToonParser
 #endif
         }
 
-        // Spec §12: decoders SHOULD tolerate surrounding whitespace around
-        // tokens. Trimmed here, after the delimiter-suffix check above, so
-        // a real tab/pipe delimiter marker (checked via EndsWith) is never
-        // mistaken for trimmable padding.
-        content = content.Trim();
+        // Spec §12: decoders trim exactly U+0020 around tokens (broader
+        // whitespace under LegacyCompatibility). Trimmed here, after the
+        // delimiter-suffix check above, so a real tab/pipe delimiter
+        // marker (checked via EndsWith) is never mistaken for trimmable
+        // padding.
+        content = StringUtils.TrimToken(content, legacyCompatibility);
 
         // Spec §6 keyed-seg grammar (v4.0.0 RFC #57, §9.5 keyed tabular
         // form for objects): "[" length ":" [ delimsym ] "]" — a literal
@@ -354,13 +356,13 @@ internal static class ToonParser
     /// Parses a tabular header's field list (spec §9.3/§9.5), including
     /// any nested field groups (v4.0.0 RFC #46, e.g. "customer{name,country}").
     /// </summary>
-    private static TabularField[] ParseFieldList(string content)
+    private static TabularField[] ParseFieldList(string content, bool legacyCompatibility)
     {
-        var segments = SplitTopLevelFieldSegments(content);
+        var segments = SplitTopLevelFieldSegments(content, legacyCompatibility);
         var fields = new TabularField[segments.Length];
         for (int i = 0; i < segments.Length; i++)
         {
-            fields[i] = ParseFieldSegment(segments[i]);
+            fields[i] = ParseFieldSegment(segments[i], legacyCompatibility);
         }
         return fields;
     }
@@ -369,14 +371,14 @@ internal static class ToonParser
     /// Parses one field-list segment into a leaf field or a nested field
     /// group.
     /// </summary>
-    private static TabularField ParseFieldSegment(string segment)
+    private static TabularField ParseFieldSegment(string segment, bool legacyCompatibility)
     {
-        string trimmed = segment.Trim();
+        string trimmed = StringUtils.TrimToken(segment, legacyCompatibility);
         int braceStart = FindUnquotedChar(trimmed, Constants.OpenBrace);
 
         if (braceStart == -1)
         {
-            return new TabularField { Name = ParseStringLiteral(trimmed), Children = null };
+            return new TabularField { Name = ParseStringLiteral(trimmed, legacyCompatibility), Children = null };
         }
 
         if (trimmed.Length == 0 || trimmed[trimmed.Length - 1] != Constants.CloseBrace)
@@ -385,20 +387,20 @@ internal static class ToonParser
         }
 
 #if NETSTANDARD2_0
-        string namePart = trimmed.Substring(0, braceStart).Trim();
+        string namePart = StringUtils.TrimToken(trimmed.Substring(0, braceStart), legacyCompatibility);
         string innerContent = trimmed.Substring(braceStart + 1, trimmed.Length - braceStart - 2);
 #else
-        string namePart = trimmed[..braceStart].Trim();
+        string namePart = StringUtils.TrimToken(trimmed[..braceStart], legacyCompatibility);
         string innerContent = trimmed[(braceStart + 1)..^1];
 #endif
 
-        var children = ParseFieldList(innerContent);
+        var children = ParseFieldList(innerContent, legacyCompatibility);
         if (children.Length == 0)
         {
             throw new InvalidOperationException($"Empty nested field group: {segment}");
         }
 
-        return new TabularField { Name = ParseStringLiteral(namePart), Children = children };
+        return new TabularField { Name = ParseStringLiteral(namePart, legacyCompatibility), Children = children };
     }
 
     /// <summary>
@@ -406,7 +408,7 @@ internal static class ToonParser
     /// segments and nested brace groups (so a nested field group's own
     /// commas don't split it apart).
     /// </summary>
-    private static string[] SplitTopLevelFieldSegments(string content)
+    private static string[] SplitTopLevelFieldSegments(string content, bool legacyCompatibility)
     {
         var values = new List<string>();
         var current = new System.Text.StringBuilder();
@@ -452,7 +454,7 @@ internal static class ToonParser
 
             if (!inQuotes && braceDepth == 0 && c == Constants.Comma)
             {
-                values.Add(current.ToString().Trim());
+                values.Add(StringUtils.TrimToken(current.ToString(), legacyCompatibility));
                 current.Clear();
                 i++;
                 continue;
@@ -464,7 +466,7 @@ internal static class ToonParser
 
         if (current.Length > 0 || values.Count > 0)
         {
-            values.Add(current.ToString().Trim());
+            values.Add(StringUtils.TrimToken(current.ToString(), legacyCompatibility));
         }
 
         return values.ToArray();
@@ -473,7 +475,7 @@ internal static class ToonParser
     /// <summary>
     /// Parses delimited values, respecting quoted strings.
     /// </summary>
-    public static string[] ParseDelimitedValues(string input, char delimiter)
+    public static string[] ParseDelimitedValues(string input, char delimiter, bool legacyCompatibility = false)
     {
         var values = new List<string>();
         var current = new System.Text.StringBuilder();
@@ -503,7 +505,7 @@ internal static class ToonParser
 
             if (c == delimiter && !inQuotes)
             {
-                values.Add(current.ToString().Trim());
+                values.Add(StringUtils.TrimToken(current.ToString(), legacyCompatibility));
                 current.Clear();
                 i++;
                 continue;
@@ -516,7 +518,7 @@ internal static class ToonParser
         // Add last value
         if (current.Length > 0 || values.Count > 0)
         {
-            values.Add(current.ToString().Trim());
+            values.Add(StringUtils.TrimToken(current.ToString(), legacyCompatibility));
         }
 
         return values.ToArray();
@@ -533,9 +535,9 @@ internal static class ToonParser
     /// <summary>
     /// Parses a string literal, handling quotes and escaping.
     /// </summary>
-    public static string ParseStringLiteral(string token)
+    public static string ParseStringLiteral(string token, bool legacyCompatibility = false)
     {
-        string trimmed = token.Trim();
+        string trimmed = StringUtils.TrimToken(token, legacyCompatibility);
 
 #if NETSTANDARD2_0
         if (trimmed.StartsWith(Constants.DoubleQuote.ToString()))
@@ -570,7 +572,7 @@ internal static class ToonParser
     /// <summary>
     /// Parses a key token from content.
     /// </summary>
-    public static KeyParseResult ParseKeyToken(string content, int start)
+    public static KeyParseResult ParseKeyToken(string content, int start, bool legacyCompatibility = false)
     {
         if (content[start] == Constants.DoubleQuote)
         {
@@ -578,7 +580,7 @@ internal static class ToonParser
         }
         else
         {
-            return ParseUnquotedKey(content, start);
+            return ParseUnquotedKey(content, start, legacyCompatibility);
         }
     }
 
@@ -599,7 +601,7 @@ internal static class ToonParser
     /// <summary>
     /// Parses an unquoted key.
     /// </summary>
-    private static KeyParseResult ParseUnquotedKey(string content, int start)
+    private static KeyParseResult ParseUnquotedKey(string content, int start, bool legacyCompatibility = false)
     {
         int end = start;
         while (end < content.Length && content[end] != Constants.Colon)
@@ -614,9 +616,9 @@ internal static class ToonParser
         }
 
 #if NETSTANDARD2_0
-    string key = content.Substring(start, end - start).Trim();
+    string key = StringUtils.TrimToken(content.Substring(start, end - start), legacyCompatibility);
 #else
-    string key = content[start..end].Trim();
+    string key = StringUtils.TrimToken(content[start..end], legacyCompatibility);
 #endif
 
         // Skip the colon

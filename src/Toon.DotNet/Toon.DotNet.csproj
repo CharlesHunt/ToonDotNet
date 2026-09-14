@@ -14,7 +14,7 @@
     <!-- Package information -->
     <PackageId>Toon.DotNet</PackageId>
     <Title>ToonFormat for DotNet</Title>
-    <Version>3.3.2</Version>
+    <Version>4.1.1</Version>
     <Description>Token-Oriented Object Notation (TOON) Serializer for .NET 10 — a compact, human-readable, token-efficient format optimized for LLM prompts and for MCP tool data responses. Optimised for .NET 10 but backwards compatible with earlier versions of the framework.</Description>
     <Authors>Charles Hunt</Authors>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
@@ -25,7 +25,7 @@
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageReleaseNotes>See CHANGELOG.md for full release notes. https://github.com/CharlesHunt/ToonDotNet/blob/master/CHANGELOG.md</PackageReleaseNotes>
     <PackageIcon>hrd.png</PackageIcon>
-    <PackageVersion>3.3.2.0</PackageVersion>
+    <PackageVersion>4.1.1.0</PackageVersion>
   </PropertyGroup>
 
   <ItemGroup>

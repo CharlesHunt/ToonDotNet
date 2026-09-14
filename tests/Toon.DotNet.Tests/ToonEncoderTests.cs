@@ -354,13 +354,17 @@ public class ToonEncoderTests
     }
 
     [Fact]
-    public void Encode_ArrayOfObjectsWithNestedValues_ReturnsNestedFieldGroupTabularFormat()
+    public void Encode_ArrayOfObjectsWithNestedValues_DefaultOptions_UsesNestedFieldGroupTabularFormat()
     {
         // Arrange - Objects whose only non-primitive column is
         // nested-uniform (spec §9.3, v4.0.0 RFC #46): every "details" is
-        // a non-empty object with the same keys, so the array still
-        // qualifies for tabular form via a nested field group rather
-        // than falling back to list form.
+        // a non-empty object with the same keys, so the array qualifies
+        // for tabular form via a nested field group. This is v4.0.0-only
+        // grammar a v3.3.2 decoder can't parse, gated behind
+        // EncodeOptions.SpecVersion — TOON_V4.md phase 5 flipped its
+        // default to V4, so default (no-options) encoding now produces
+        // this shape; see the dedicated V3-vs-V4 coverage in
+        // ToonV4ComplianceTests.cs for the V3 (list-form) fallback.
         var data = new[]
         {
             new { id = 1, details = new { age = 30 } },
@@ -407,13 +411,16 @@ public class ToonEncoderTests
     }
 
     [Fact]
-    public void Encode_ListItemWithNestedObject_ReturnsNestedFieldGroupTabularFormat()
+    public void Encode_SingleElementArrayWithNestedObject_DefaultOptions_UsesNestedFieldGroupTabularFormat()
     {
         // Arrange - a single-element array of objects still qualifies
         // for tabular form (spec §9.3 has no minimum row count, unlike
         // §9.5's keyed tabular form); "person" is a nested-uniform
-        // column (v4.0.0 RFC #46), so it becomes a nested field group
-        // rather than the old list-item fallback.
+        // column (v4.0.0 RFC #46) — see the comment on
+        // Encode_ArrayOfObjectsWithNestedValues_DefaultOptions_UsesNestedFieldGroupTabularFormat
+        // above. This test was originally named for the pre-v4 list-item
+        // shape this data used to produce; under the now-default V4
+        // behavior it no longer takes the list-item code path at all.
         var data = new[]
         {
             new { id = 1, person = new { name = "Alice" } }

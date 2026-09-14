@@ -25,7 +25,31 @@ internal static class ToonDecoder
         }
 
         var cursor = new LineCursor(scanResult.Lines, scanResult.BlankLines);
-        return DecodeValueFromLines(cursor, options);
+        var result = DecodeValueFromLines(cursor, options);
+
+        // Spec §12/§5 (v4.0.0): indentation depth jumps, over-indented
+        // lines (deeper than the enclosing scope's content depth when
+        // the preceding line didn't open a scope), and trailing content
+        // after a completed root form are all strict-mode errors that
+        // "MUST NOT be silently discarded." Rather than hand-detecting
+        // each case at every recursive decode step, one general check
+        // here catches all three: whenever any nested decode step hits a
+        // line at an unexpected depth, it simply stops and returns
+        // without consuming further — so any such inconsistency
+        // anywhere in the document leaves lines behind in the cursor.
+        // Legitimate multi-level jumps the grammar already understands
+        // (e.g. a tabular array as the first field of a list-item
+        // object, spec §10) are fully consumed by the code that knows to
+        // read them, so they never trip this check.
+        if (options.Strict && !cursor.AtEnd)
+        {
+            var unexpected = cursor.Peek()!;
+            throw new InvalidOperationException(
+                $"Line {unexpected.LineNumber}: unexpected content at this indentation level " +
+                "(invalid indentation depth jump, over-indented line, or trailing content after a completed value)");
+        }
+
+        return result;
     }
 
     /// <summary>
@@ -44,7 +68,7 @@ internal static class ToonDecoder
         // to an object rather than an array).
         if (ToonParser.IsArrayHeaderAfterHyphen(first.Content))
         {
-            var headerInfo = ToonParser.ParseArrayHeaderLine(first.Content, Constants.DefaultDelimiter, options.Strict);
+            var headerInfo = ToonParser.ParseArrayHeaderLine(first.Content, Constants.DefaultDelimiter, options.Strict, options.LegacyCompatibility);
             if (headerInfo != null)
             {
                 cursor.Advance(); // Move past the header line
@@ -57,7 +81,8 @@ internal static class ToonDecoder
         // Check for single primitive value
         if (cursor.Length == 1 && !IsKeyValueLine(first))
         {
-            return LiteralUtils.ParsePrimitiveToken(first.Content.Trim());
+            cursor.Advance();
+            return LiteralUtils.ParsePrimitiveToken(first.Content, options.LegacyCompatibility);
         }
 
         // Default to object
@@ -158,7 +183,7 @@ internal static class ToonDecoder
         // Check for array header first (before parsing key). Also covers
         // a keyed-tabular field header (spec §9.5), which reuses the same
         // header shape but decodes to an object, not an array.
-        var arrayHeader = ToonParser.ParseArrayHeaderLine(content, Constants.DefaultDelimiter, options.Strict);
+        var arrayHeader = ToonParser.ParseArrayHeaderLine(content, Constants.DefaultDelimiter, options.Strict, options.LegacyCompatibility);
         if (arrayHeader != null && arrayHeader.Header.Key != null)
         {
             var value = arrayHeader.Header.IsKeyedTabular
@@ -169,12 +194,12 @@ internal static class ToonDecoder
         }
 
         // Parse regular key-value
-        var keyResult = ToonParser.ParseKeyToken(content, 0);
+        var keyResult = ToonParser.ParseKeyToken(content, 0, options.LegacyCompatibility);
     string valueContent;
 #if NETSTANDARD2_0
-    valueContent = content.Substring(keyResult.End).Trim();
+    valueContent = StringUtils.TrimToken(content.Substring(keyResult.End), options.LegacyCompatibility);
 #else
-    valueContent = content[keyResult.End..].Trim();
+    valueContent = StringUtils.TrimToken(content[keyResult.End..], options.LegacyCompatibility);
 #endif
 
         JsonElement parsedValue;
@@ -198,7 +223,7 @@ internal static class ToonDecoder
         else
         {
             // Inline primitive value
-            parsedValue = LiteralUtils.ParsePrimitiveToken(valueContent);
+            parsedValue = LiteralUtils.ParsePrimitiveToken(valueContent, options.LegacyCompatibility);
         }
 
         return (keyResult.Key, parsedValue, followDepth);
@@ -291,14 +316,14 @@ internal static class ToonDecoder
 
             cursor.Advance();
 
-            var keyResult = ToonParser.ParseKeyToken(line.Content, 0);
+            var keyResult = ToonParser.ParseKeyToken(line.Content, 0, options.LegacyCompatibility);
 #if NETSTANDARD2_0
-            string cellsContent = line.Content.Substring(keyResult.End).Trim();
+            string cellsContent = StringUtils.TrimToken(line.Content.Substring(keyResult.End), options.LegacyCompatibility);
 #else
-            string cellsContent = line.Content[keyResult.End..].Trim();
+            string cellsContent = StringUtils.TrimToken(line.Content[keyResult.End..], options.LegacyCompatibility);
 #endif
 
-            var values = ToonParser.ParseDelimitedValues(cellsContent, header.Delimiter);
+            var values = ToonParser.ParseDelimitedValues(cellsContent, header.Delimiter, options.LegacyCompatibility);
             var primitives = ToonParser.MapRowValuesToPrimitives(values);
 
             // Spec §9.5: strict mode MUST enforce each entry row's cell
@@ -349,7 +374,7 @@ internal static class ToonDecoder
 
             cursor.Advance();
 
-            var values = ToonParser.ParseDelimitedValues(line.Content, header.Delimiter);
+            var values = ToonParser.ParseDelimitedValues(line.Content, header.Delimiter, options.LegacyCompatibility);
             var primitives = ToonParser.MapRowValuesToPrimitives(values);
 
             // Spec §9.3: in strict mode, each row's cell count MUST equal
@@ -452,7 +477,7 @@ internal static class ToonDecoder
                 {
                     // Spec §6: absence of a delimiter suffix means comma,
                     // never inherited from the parent array's delimiter.
-                    var nestedHeader = ToonParser.ParseArrayHeaderLine(itemContent, Constants.DefaultDelimiter, options.Strict);
+                    var nestedHeader = ToonParser.ParseArrayHeaderLine(itemContent, Constants.DefaultDelimiter, options.Strict, options.LegacyCompatibility);
                     if (nestedHeader != null)
                     {
                         var nestedArray = DecodeArrayFromHeader(nestedHeader.Header, nestedHeader.InlineValues, cursor, expectedDepth, options);
@@ -468,7 +493,7 @@ internal static class ToonDecoder
                     // sit at hyphenDepth+2, not hyphenDepth+1, so they don't
                     // collide with this object's remaining fields (read
                     // below at expectedDepth+1).
-                    var firstFieldHeader = ToonParser.ParseArrayHeaderLine(itemContent, Constants.DefaultDelimiter, options.Strict);
+                    var firstFieldHeader = ToonParser.ParseArrayHeaderLine(itemContent, Constants.DefaultDelimiter, options.Strict, options.LegacyCompatibility);
                     string key;
                     JsonElement value;
 
@@ -501,14 +526,25 @@ internal static class ToonDecoder
                 else
                 {
                     // Primitive value
-                    items.Add(LiteralUtils.ParsePrimitiveToken(itemContent));
+                    items.Add(LiteralUtils.ParsePrimitiveToken(itemContent, options.LegacyCompatibility));
                 }
             }
             else
             {
-                // Non-list item format - treat as primitive
+                // Spec §14.2 (v4.1.0): a line at list-item depth not
+                // introduced by "- " is a misplaced scalar — a
+                // structural error in BOTH strict and non-strict modes,
+                // not a valid implicit list item. LegacyCompatibility
+                // preserves this codebase's old (lenient in both modes)
+                // tolerance of treating it as a bare primitive item.
+                if (!options.LegacyCompatibility)
+                {
+                    throw new InvalidOperationException(
+                        $"Line {line.LineNumber}: misplaced scalar — list items must start with \"- \"");
+                }
+
                 cursor.Advance();
-                items.Add(LiteralUtils.ParsePrimitiveToken(line.Content));
+                items.Add(LiteralUtils.ParsePrimitiveToken(line.Content, options.LegacyCompatibility));
             }
         }
 

@@ -9,13 +9,22 @@ namespace ToonFormat;
 public enum ToonSpecVersion
 {
     /// <summary>
-    /// TOON spec v3.x (the line this library fully conforms to as of
-    /// <see cref="Constants.SpecVersion"/>).
+    /// TOON spec v3.x. Reproduces true v3.3.2 output for the behaviors
+    /// this enum gates: no nested field groups, no keyed tabular form,
+    /// and the narrower (leading '-' only) numeric-like quoting pattern
+    /// — the known v3.3.2 leading-plus round-trip gap included. Opt into
+    /// this when byte-for-byte v3.3.2 compatibility with a downstream
+    /// v3-only consumer matters more than the v4 fixes.
     /// </summary>
     V3,
 
     /// <summary>
-    /// TOON spec v4.0.0+. Not yet implemented — see TOON_V4.md.
+    /// TOON spec v4.0.0+ (the line this library targets as of
+    /// <see cref="Constants.SpecVersion"/>, and <see cref="EncodeOptions.SpecVersion"/>'s
+    /// default). See TOON_V4.md for implementation status; encoding
+    /// gates nested field groups (§9.3 RFC #46), keyed tabular form
+    /// (§9.5 RFC #57), and leading-plus numeric-like quoting (§7.2)
+    /// behind this value.
     /// </summary>
     V4
 }
@@ -42,16 +51,18 @@ public class EncodeOptions
     public char? LengthMarker { get; set; }
 
     /// <summary>
-    /// The TOON grammar variant to encode. Currently has no effect — v4
-    /// output support (keyed tabular form, nested field groups) is not
-    /// yet implemented (see TOON_V4.md). Reserved so later work has a
-    /// stable place to gate v4-only output without a breaking API change;
-    /// the default will move to <see cref="ToonSpecVersion.V4"/> once
-    /// that support lands, which will itself be a documented behavior
-    /// change (see TOON_V4.md's "Version-aware EncodeOptions /
-    /// DecodeOptions" section).
+    /// The TOON grammar variant to encode. Defaults to
+    /// <see cref="ToonSpecVersion.V4"/>, matching <see cref="Constants.SpecVersion"/>
+    /// — encoding uses nested field groups, keyed tabular form, and the
+    /// wider leading-plus numeric-like quoting pattern by default. Set to
+    /// <see cref="ToonSpecVersion.V3"/> to instead reproduce true v3.3.2
+    /// output (no nested field groups, no keyed tabular form, the
+    /// narrower leading-'-'-only quoting pattern) for compatibility with
+    /// a downstream v3-only consumer. See TOON_V4.md's "Version-aware
+    /// EncodeOptions / DecodeOptions" section for the full list of gated
+    /// behaviors.
     /// </summary>
-    public ToonSpecVersion SpecVersion { get; set; } = ToonSpecVersion.V3;
+    public ToonSpecVersion SpecVersion { get; set; } = ToonSpecVersion.V4;
 }
 
 /// <summary>
@@ -70,16 +81,17 @@ public class DecodeOptions
     public bool Strict { get; set; } = true;
 
     /// <summary>
-    /// Currently has no effect — reserved for the small set of TOON v4
-    /// semantic changes that genuinely conflict with v3 behavior for the
-    /// same input (token trimming scope, leading-plus numeric-like
-    /// quoting, and the v4.1 misplaced-scalar rule), none of which are
-    /// implemented yet. The decoder does not use a version selector to
-    /// decide what grammar it understands — see TOON_V4.md's "superset
-    /// grammar, not per-version detection" section — this flag exists
-    /// only to opt back into the old lenient behavior for that narrow set
-    /// of conflicts once they're implemented, defaulting to correct v4
-    /// behavior.
+    /// When true, opts back into the pre-v4 decoder behavior for the
+    /// small set of TOON v4 semantic changes that genuinely conflict
+    /// with v3 behavior for the same input: token trimming scope (plain
+    /// whitespace trimming instead of spec §12's U+0020-only rule) and
+    /// the v4.1 misplaced-scalar rule (tolerating a bare, non-"- "-prefixed
+    /// line inside a list instead of erroring). Defaults to <c>false</c>
+    /// (correct v4 behavior). The decoder does not use a version
+    /// selector to decide what grammar it understands — see TOON_V4.md's
+    /// "superset grammar, not per-version detection" section — this flag
+    /// exists only for this narrow set of genuine conflicts, not general
+    /// v3-vs-v4 selection.
     /// </summary>
     public bool LegacyCompatibility { get; set; } = false;
 }

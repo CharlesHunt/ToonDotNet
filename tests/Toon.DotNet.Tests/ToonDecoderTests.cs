@@ -591,9 +591,14 @@ metadata:
     [Fact]
     public void Decode_ListArrayWithoutListMarkers_ReturnsCorrectStructure()
     {
-        // Arrange - Non-standard but should handle gracefully in non-strict mode
+        // Arrange - Non-standard leniency. As of TOON_V4.md phase 4 step
+        // 16 (spec v4.1.0 §14.2), a list item without a "- " marker is a
+        // misplaced scalar and errors by default in both strict and
+        // non-strict mode; this old (non-spec-mandated) tolerance is now
+        // opt-in via LegacyCompatibility, exercised together with
+        // Strict = false exactly as this test always intended.
         var toon = "items[2]:\n  apple\n  banana";
-        var options = new DecodeOptions { Strict = false };
+        var options = new DecodeOptions { Strict = false, LegacyCompatibility = true };
 
         // Act
         var result = Toon.Decode(toon, options);

@@ -18,7 +18,7 @@ internal static class ToonEncoder
     {
         if (Normalizer.IsJsonPrimitive(value))
         {
-            return Primitives.EncodePrimitive(value, options.Delimiter);
+            return Primitives.EncodePrimitive(value, options.Delimiter, options.SpecVersion);
         }
 
         var writer = new LineWriter(options.Indent);
@@ -32,8 +32,9 @@ internal static class ToonEncoder
         else if (Normalizer.IsJsonObject(value))
         {
             // Spec §9.5 (v4.0.0 RFC #57): encoders MUST use keyed tabular
-            // form for a root object of uniform objects.
-            var keyedFields = ExtractKeyedTabularHeader(value, out var rootEntries);
+            // form for a root object of uniform objects. V3 never
+            // qualifies — see ExtractKeyedTabularHeader.
+            var keyedFields = ExtractKeyedTabularHeader(value, options.SpecVersion, out var rootEntries);
             if (keyedFields != null)
             {
                 EncodeObjectAsKeyedTabular(null, rootEntries, keyedFields, writer, 0, options);
@@ -67,7 +68,7 @@ internal static class ToonEncoder
 
         if (Normalizer.IsJsonPrimitive(value))
         {
-            writer.Push(depth, $"{encodedKey}: {Primitives.EncodePrimitive(value, options.Delimiter)}");
+            writer.Push(depth, $"{encodedKey}: {Primitives.EncodePrimitive(value, options.Delimiter, options.SpecVersion)}");
         }
         else if (Normalizer.IsJsonArray(value))
         {
@@ -87,8 +88,9 @@ internal static class ToonEncoder
                 // tabular form for an object-field-position object of
                 // uniform objects (an array element never qualifies —
                 // §10 — so this detection is intentionally not wired
-                // into the list-item encoding paths below).
-                var keyedFields = ExtractKeyedTabularHeader(value, out var entries);
+                // into the list-item encoding paths below). V3 never
+                // qualifies — see ExtractKeyedTabularHeader.
+                var keyedFields = ExtractKeyedTabularHeader(value, options.SpecVersion, out var entries);
                 if (keyedFields != null)
                 {
                     EncodeObjectAsKeyedTabular(key, entries, keyedFields, writer, depth, options);
@@ -107,12 +109,16 @@ internal static class ToonEncoder
     /// from an object whose values are all uniform non-empty objects,
     /// reusing the same column-uniformity logic as array-of-objects
     /// tabular detection (§9.3). Returns null (and detection doesn't
-    /// apply) when the object has fewer than two entries or its values
-    /// aren't uniform.
+    /// apply) when <paramref name="specVersion"/> is <see cref="ToonSpecVersion.V3"/>
+    /// (keyed tabular form doesn't exist in v3.3.2 at all), or when the
+    /// object has fewer than two entries or its values aren't uniform.
     /// </summary>
-    private static TabularField[]? ExtractKeyedTabularHeader(JsonElement obj, out JsonProperty[] entries)
+    private static TabularField[]? ExtractKeyedTabularHeader(JsonElement obj, ToonSpecVersion specVersion, out JsonProperty[] entries)
     {
         entries = obj.EnumerateObject().ToArray();
+
+        if (specVersion == ToonSpecVersion.V3)
+            return null;
 
         // Spec §9.5: detection requires at least two entries.
         if (entries.Length < 2)
@@ -129,7 +135,7 @@ internal static class ToonEncoder
         var fields = new List<TabularField>();
         foreach (var property in firstProperties)
         {
-            var field = BuildTabularFieldOrNull(property.Name, entryValues);
+            var field = BuildTabularFieldOrNull(property.Name, entryValues, specVersion);
             if (field == null)
                 return null;
             fields.Add(field);
@@ -157,7 +163,7 @@ internal static class ToonEncoder
             var values = new List<JsonElement>();
             CollectTabularRowValues(entry.Value, fields, values);
 
-            string joinedValue = Primitives.EncodeAndJoinPrimitives(values.ToArray(), options.Delimiter);
+            string joinedValue = Primitives.EncodeAndJoinPrimitives(values.ToArray(), options.Delimiter, options.SpecVersion);
             string encodedEntryKey = Primitives.EncodeKey(entry.Name);
             writer.Push(depth + 1, $"{encodedEntryKey}: {joinedValue}");
         }
@@ -180,7 +186,7 @@ internal static class ToonEncoder
         // Primitive array
         if (Normalizer.IsArrayOfPrimitives(value))
         {
-            string formatted = Primitives.FormatInlineArrayLine(elements, options.Delimiter, key, options.LengthMarker);
+            string formatted = Primitives.FormatInlineArrayLine(elements, options.Delimiter, key, options.LengthMarker, options.SpecVersion);
             writer.Push(depth, formatted);
             return;
         }
@@ -199,7 +205,7 @@ internal static class ToonEncoder
         // Array of objects
         if (Normalizer.IsArrayOfObjects(value))
         {
-            var header = ExtractTabularHeader(elements);
+            var header = ExtractTabularHeader(elements, options.SpecVersion);
             if (header != null)
             {
                 EncodeArrayOfObjectsAsTabular(key, elements, header, writer, depth, options);
@@ -228,7 +234,7 @@ internal static class ToonEncoder
             if (Normalizer.IsArrayOfPrimitives(arr))
             {
                 var elements = arr.EnumerateArray().ToArray();
-                string inline = Primitives.FormatInlineArrayLine(elements, options.Delimiter, null, options.LengthMarker);
+                string inline = Primitives.FormatInlineArrayLine(elements, options.Delimiter, null, options.LengthMarker, options.SpecVersion);
                 writer.Push(depth + 1, $"{Constants.ListItemPrefix}{inline}");
             }
         }
@@ -257,7 +263,7 @@ internal static class ToonEncoder
             var values = new List<JsonElement>();
             CollectTabularRowValues(row, header, values);
 
-            string joinedValue = Primitives.EncodeAndJoinPrimitives(values.ToArray(), options.Delimiter);
+            string joinedValue = Primitives.EncodeAndJoinPrimitives(values.ToArray(), options.Delimiter, options.SpecVersion);
             writer.Push(depth, joinedValue);
         }
     }
@@ -291,10 +297,14 @@ internal static class ToonEncoder
     /// <summary>
     /// Extracts a tabular field list (spec §9.3) from an array of objects
     /// if they have uniform structure, including nested-uniform columns
-    /// as nested field groups (v4.0.0 RFC #46). Returns null if the array
-    /// doesn't qualify for tabular form at all.
+    /// as nested field groups (v4.0.0 RFC #46, only considered when
+    /// <paramref name="specVersion"/> is <see cref="ToonSpecVersion.V4"/>
+    /// — v3.3.2 has no concept of nested field groups, so under V3 any
+    /// non-primitive column disqualifies the whole array from tabular
+    /// form, exactly as it did before nested field groups existed).
+    /// Returns null if the array doesn't qualify for tabular form at all.
     /// </summary>
-    private static TabularField[]? ExtractTabularHeader(JsonElement[] rows)
+    private static TabularField[]? ExtractTabularHeader(JsonElement[] rows, ToonSpecVersion specVersion)
     {
         if (rows.Length == 0)
             return null;
@@ -310,7 +320,7 @@ internal static class ToonEncoder
         var fields = new List<TabularField>();
         foreach (var property in properties)
         {
-            var field = BuildTabularFieldOrNull(property.Name, rows);
+            var field = BuildTabularFieldOrNull(property.Name, rows, specVersion);
             if (field == null)
                 return null;
             fields.Add(field);
@@ -326,11 +336,14 @@ internal static class ToonEncoder
     /// <summary>
     /// Builds the tabular field for one column name, recursively
     /// descending into nested-uniform object columns as nested field
-    /// groups. Returns null when the column disqualifies the whole array
-    /// from tabular form (spec §9.3: a column that is neither
-    /// uniform-primitive nor nested-uniform).
+    /// groups when <paramref name="specVersion"/> is <see cref="ToonSpecVersion.V4"/>.
+    /// Under <see cref="ToonSpecVersion.V3"/>, a non-primitive column
+    /// always disqualifies the whole array from tabular form (spec §9.3
+    /// as it exists at v3.3.2, before nested-uniform columns/RFC #46).
+    /// Returns null when the column disqualifies the array from tabular
+    /// form.
     /// </summary>
-    private static TabularField? BuildTabularFieldOrNull(string name, JsonElement[] rows)
+    private static TabularField? BuildTabularFieldOrNull(string name, JsonElement[] rows, ToonSpecVersion specVersion)
     {
         var columnValues = new JsonElement[rows.Length];
         for (int i = 0; i < rows.Length; i++)
@@ -345,9 +358,13 @@ internal static class ToonEncoder
             return new TabularField { Name = name, Children = null };
         }
 
-        // Nested-uniform: every value is a non-empty object, all with the
-        // same key set, and every sub-column is itself uniform-primitive
-        // or nested-uniform (recursively, unbounded depth).
+        if (specVersion == ToonSpecVersion.V3)
+            return null;
+
+        // Nested-uniform (v4.0.0 RFC #46): every value is a non-empty
+        // object, all with the same key set, and every sub-column is
+        // itself uniform-primitive or nested-uniform (recursively,
+        // unbounded depth).
         bool allNonEmptyObjects = columnValues.All(v =>
             Normalizer.IsJsonObject(v) && v.EnumerateObject().Any());
         if (!allNonEmptyObjects)
@@ -358,7 +375,7 @@ internal static class ToonEncoder
         var subFields = new List<TabularField>();
         foreach (var subProperty in firstSubProperties)
         {
-            var subField = BuildTabularFieldOrNull(subProperty.Name, columnValues);
+            var subField = BuildTabularFieldOrNull(subProperty.Name, columnValues, specVersion);
             if (subField == null)
                 return null;
             subFields.Add(subField);
@@ -417,12 +434,12 @@ internal static class ToonEncoder
     {
         if (Normalizer.IsJsonPrimitive(value))
         {
-            writer.Push(depth, $"{Constants.ListItemPrefix}{Primitives.EncodePrimitive(value, options.Delimiter)}");
+            writer.Push(depth, $"{Constants.ListItemPrefix}{Primitives.EncodePrimitive(value, options.Delimiter, options.SpecVersion)}");
         }
         else if (Normalizer.IsJsonArray(value) && Normalizer.IsArrayOfPrimitives(value))
         {
             var elements = value.EnumerateArray().ToArray();
-            string inline = Primitives.FormatInlineArrayLine(elements, options.Delimiter, null, options.LengthMarker);
+            string inline = Primitives.FormatInlineArrayLine(elements, options.Delimiter, null, options.LengthMarker, options.SpecVersion);
             writer.Push(depth, $"{Constants.ListItemPrefix}{inline}");
         }
         else if (Normalizer.IsJsonArray(value))
@@ -432,7 +449,7 @@ internal static class ToonEncoder
             // §9.2/§9.4 requires the expanded "- [M<delim?>]:" header form
             // with items at depth+1, not the inline shorthand above.
             var elements = value.EnumerateArray().ToArray();
-            var tabularHeader = Normalizer.IsArrayOfObjects(value) ? ExtractTabularHeader(elements) : null;
+            var tabularHeader = Normalizer.IsArrayOfObjects(value) ? ExtractTabularHeader(elements, options.SpecVersion) : null;
 
             if (tabularHeader != null)
             {
@@ -476,7 +493,7 @@ internal static class ToonEncoder
 
         if (Normalizer.IsJsonPrimitive(firstValue))
         {
-            writer.Push(depth, $"{Constants.ListItemPrefix}{encodedKey}: {Primitives.EncodePrimitive(firstValue, options.Delimiter)}");
+            writer.Push(depth, $"{Constants.ListItemPrefix}{encodedKey}: {Primitives.EncodePrimitive(firstValue, options.Delimiter, options.SpecVersion)}");
         }
         else if (Normalizer.IsJsonArray(firstValue))
         {
@@ -484,14 +501,14 @@ internal static class ToonEncoder
             {
                 // Inline format for primitive arrays
                 var elements = firstValue.EnumerateArray().ToArray();
-                string formatted = Primitives.FormatInlineArrayLine(elements, options.Delimiter, firstProperty.Name, options.LengthMarker);
+                string formatted = Primitives.FormatInlineArrayLine(elements, options.Delimiter, firstProperty.Name, options.LengthMarker, options.SpecVersion);
                 writer.Push(depth, $"{Constants.ListItemPrefix}{formatted}");
             }
             else if (Normalizer.IsArrayOfObjects(firstValue))
             {
                 // Check if array of objects can use tabular format
                 var arrayElements = firstValue.EnumerateArray().ToArray();
-                var header = ExtractTabularHeader(arrayElements);
+                var header = ExtractTabularHeader(arrayElements, options.SpecVersion);
                 if (header != null)
                 {
                     // Tabular format for uniform arrays of objects. Spec

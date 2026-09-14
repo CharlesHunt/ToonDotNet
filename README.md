@@ -1,4 +1,4 @@
-# Toon.DotNet - Versions 3.3.2
+# Toon.DotNet - Toon Spec Version 4.1.1
 ---
 
 
@@ -13,8 +13,9 @@
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
 ---
-Token-Oriented Object Notation (TOON) Serializer — a compact, human-readable serialization format designed for passing structured data to Large Language Models with significantly reduced token usage. TOON shines for uniform arrays of objects and readable nested structures. Optimised for .Net 10.0 plus backwards compatible with earlier versions. 
+Token-Oriented Object Notation (TOON) Serializer — a compact, human-readable serialization format designed for passing structured data to Large Language Models with significantly reduced token usage. TOON shines for uniform arrays of objects and readable nested structures. Optimised for .Net 10.0 plus backwards compatible with earlier versions.
 
+- Implements [TOON spec v4.1.1](https://github.com/toon-format/spec/releases/tag/v4.1.1) by default (`EncodeOptions.SpecVersion.V4`), with [v3.3.2](https://github.com/toon-format/spec/releases/tag/v3.3.2) available as an explicit opt-in (`.V3`) for byte-for-byte compatibility with v3-only consumers — see [Spec compliance](#spec-compliance)
 - Token-efficient alternative to JSON for LLM prompts
 - Human-friendly and diff-friendly
 - Strongly-typed decode support via System.Text.Json
@@ -22,7 +23,7 @@ Token-Oriented Object Notation (TOON) Serializer — a compact, human-readable s
 - Direct JSON-to-TOON and TOON-to-JSON conversion methods for seamless interoperability.
 - Synchronous and **async** file operations for reading and writing TOON and JSON data.
 - **Stream support** — encode to and decode from any `Stream`, sync and async, all targets.
-- 720 unit tests. 100% passing.
+- 809 unit tests. 100% passing.
 - Examples included. 
 
 ---
@@ -57,7 +58,13 @@ dotnet add package Toon.DotNet
 ---
 ## Spec compliance
 
-**As of `3.3.2`, this package's version number tracks the [TOON specification](https://github.com/toon-format/spec) version it implements** — see [Versioning](#versioning) below. This is also available programmatically as `ToonFormat.Constants.SpecVersion`, so callers can log or assert which spec baseline they're running against without parsing the NuGet package version. A full compliance audit against spec v3.0.x–v3.3.2 found 21 gaps (correctness, interop, and spec-purity) — **all 21 are now fixed**, which is what brought the core library into full v3.3.2 conformance. See [`TOON_V3.md`](./TOON_V3.md) for the audit and the fixes. TOON spec v4.0+ features (comments, keyed-tabular objects, nested field groups, and more) are not yet implemented — see [`TOON_V4.md`](./TOON_V4.md) for the tracked gap list; the package version will move to the v4.x line once that work lands.
+**This package's version number tracks the [TOON specification](https://github.com/toon-format/spec) version it implements** — see [Versioning](#versioning) below. This is also available programmatically as `ToonFormat.Constants.SpecVersion` (currently `"4.1.1"`), so callers can log or assert which spec baseline they're running against without parsing the NuGet package version.
+
+A full compliance audit against spec v3.0.x–v3.3.2 found 21 gaps (correctness, interop, and spec-purity) — **all 21 are fixed**, bringing the core library into full v3.3.2 conformance. See [`TOON_V3.md`](./TOON_V3.md) for the audit and the fixes.
+
+TOON spec v4.0–v4.1.1 features are implemented and **on by default**: full-line `#` comments, nested field groups in tabular headers, keyed-tabular form for objects, the v4 strict-mode tightenings (indentation, unquoted keys, UTF-8 well-formedness), and the v4 semantic-conflict fixes (token trimming scope, misplaced-scalar rejection). **`EncodeOptions.SpecVersion`** (`V3`/`V4`, **default `V4`**) explicitly gates every encoder behavior that differs between the two spec lines — nested field groups, keyed tabular form, and leading-plus numeric-like string quoting — so callers who need byte-for-byte v3.3.2 output for a v3-only downstream consumer can opt back in with `new EncodeOptions { SpecVersion = ToonSpecVersion.V3 }`. Decoding always understands the full v4 grammar regardless of this option (a v3 document is a strict subset), except for a small number of genuine v3/v4 semantic conflicts (token trimming scope, misplaced-scalar rejection) gated behind **`DecodeOptions.LegacyCompatibility`** for callers who need the old lenient behavior.
+
+One known gap remains at the `4.1.1` baseline: the decoder's number tokenization has not been fully audited against spec §4's normative number grammar, and out-of-range numeric literal handling is unverified. See [`TOON_V4.md`](./TOON_V4.md) for the full gap list and status.
 
 ---
 ## Quick start
@@ -253,10 +260,12 @@ The most efficient way to convert TOON format back to JSON:
 - `Indent` — spaces per level (default:2)
 - `Delimiter` — value delimiter for rows/inline arrays (default: ',')
 - `LengthMarker` — optional array length marker (e.g. '#')
+- `SpecVersion` — `ToonSpecVersion.V4` (default) or `.V3`. Controls nested field groups, keyed tabular form, and leading-plus numeric-like string quoting — see [Spec compliance](#spec-compliance)
 
 `DecodeOptions`
 - `Indent` — expected spaces per level (default:2)
 - `Strict` — validate lengths/row counts and forbid stray blank lines
+- `LegacyCompatibility` — opt back into pre-v4 lenient decoding for token trimming scope and misplaced-scalar tolerance (default: `false`)
 
 ---
 ### Customization example
@@ -322,7 +331,7 @@ See `examples/Toon.DotNet.Example` for a runnable console sample (core encode/de
 ---
 ## Versioning
 
-As of `3.3.2`, the core **Toon.DotNet** package's version number tracks the [TOON specification](https://github.com/toon-format/spec) version it implements, rather than semantic versioning against its own release history — `3.3.2` means "conforms to TOON spec v3.3.2." Compatibility-relevant changes are still called out explicitly in each release's notes, since the version number itself doesn't signal API stability the way semver does. The **Toon.DotNet.CSV** and **Toon.DotNet.Excel** integration packages are not implementations of the spec and continue to follow ordinary semantic versioning. See [`CHANGELOG.md`](./CHANGELOG.md) for release notes and the full versioning rationale.
+As of `3.3.2`, the core **Toon.DotNet** package's version number tracks the [TOON specification](https://github.com/toon-format/spec) version it implements, rather than semantic versioning against its own release history — the current version, `4.1.1`, means "conforms to TOON spec v4.1.1" (with one documented exception — see [Spec compliance](#spec-compliance)). Compatibility-relevant changes are still called out explicitly in each release's notes, since the version number itself doesn't signal API stability the way semver does. The **Toon.DotNet.CSV** and **Toon.DotNet.Excel** integration packages are not implementations of the spec and continue to follow ordinary semantic versioning. See [`CHANGELOG.md`](./CHANGELOG.md) for release notes and the full versioning rationale.
 
 ---
 ## Contributing

@@ -576,14 +576,21 @@ public class ToonV3ComplianceTests
     }
 
     // Finding 17 (fix-order item 11): the "numeric-like" quoting check must
-    // use the spec's exact regex (^-?\d+(?:\.\d+)?(?:e[+-]?\d+)?$), not
-    // double.TryParse, which both over- and under-quotes relative to it.
+    // use the spec's exact regex, not double.TryParse, which both over-
+    // and under-quotes relative to it. The v3.3.2 regex is
+    // ^-?\d+(?:\.\d+)?(?:e[+-]?\d+)?$ — no leading "+" — so genuine
+    // v3.3.2-compliant output does NOT quote "+5", even though this is a
+    // known spec-acknowledged interop gap (an unquoted "+5" decodes back
+    // as the number 5 on any decoder). v4.0.0 widens the sign class to
+    // [+-] to close that gap (TOON_V4.md phase 4 step 15), and — per
+    // TOON_V4.md phase 5 — EncodeOptions.SpecVersion now DEFAULTS to V4,
+    // so this v3.3.2-specific behavior needs explicit SpecVersion = V3 to
+    // observe; see Encode_StringLeadingPlusInteger_V4SpecVersion_IsQuoted
+    // in ToonV4ComplianceTests.cs for the (now-default) v4 behavior.
     [Fact]
-    public void Encode_LeadingPlusNumericLikeString_RemainsUnquoted()
+    public void Encode_LeadingPlusNumericLikeString_RemainsUnquotedUnderV3()
     {
-        // The v3 numeric-like regex has no "+" — leading-plus quoting is a
-        // v4.0.0-only addition (tracked separately in TOON_V4.md).
-        var result = Toon.Encode(new { value = "+5" });
+        var result = Toon.Encode(new { value = "+5" }, new EncodeOptions { SpecVersion = ToonSpecVersion.V3 });
 
         Assert.Equal("value: +5", result);
     }

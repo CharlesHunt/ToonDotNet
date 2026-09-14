@@ -1,4 +1,4 @@
-﻿# Toon.DotNet.CSV - Version 3.3.2
+﻿# Toon.DotNet.CSV - Version 3.4.0
 ---
 
 [![.NET 11.0](https://img.shields.io/badge/.NET-11.0-blue.svg)![.NET 10.0](https://img.shields.io/badge/.NET-10.0-blue.svg)![.NET 9.0](https://img.shields.io/badge/.NET-9.0-blue.svg)![.NET 8.0](https://img.shields.io/badge/.NET-8.0-blue.svg)](https://dotnet.microsoft.com/download)
@@ -31,6 +31,14 @@
 - **Convert a `.toon` file** directly to a `.csv` file in one call
 - **Async file support** — `ToCsvAsync` for non-blocking I/O
 
+### Multi-dataset support
+CSV has no native multi-table concept, so a TOON document with several named datasets (a root object whose top-level values are each an array — the CSV equivalent of one worksheet per dataset in [Toon.DotNet.Excel](https://www.nuget.org/packages/Toon.DotNet.Excel)) converts to **one CSV per dataset**, the same convention database/BI export tools use.
+- **`ToCsvDictionary`** — convert a multi-dataset TOON document to an in-memory `Dictionary<string, string>` (dataset name → CSV content)
+- **`ToCsvFiles`** — write one `.csv` file per dataset to a directory, with automatic file-name sanitization and de-duplication; `ToCsvFilesAsync` for non-blocking I/O
+- **`FromCsvDictionary`** — the reverse: combine a `Dictionary<string, string>` of named CSV content into one multi-dataset TOON document
+- **`FromCsvFiles`** — the reverse: read every CSV file in a directory and combine them into one multi-dataset TOON document, keyed by file name; `FromCsvFilesAsync` for non-blocking I/O
+- **`SaveCsvFilesAsToon`** — read a directory of CSV files and save the combined result straight to a `.toon` file; `SaveCsvFilesAsToonAsync` for non-blocking I/O
+
 ### Extension methods
 - `string.CsvToToon()` — convert a CSV string to TOON inline
 - `string.ToonToCsv()` — convert a TOON string to CSV inline
@@ -45,7 +53,7 @@
 - Built on [CsvHelper](https://joshclose.github.io/CsvHelper/) for robust, RFC 4180-compliant CSV parsing and writing
 - All encode/decode calls accept the standard `EncodeOptions` and `DecodeOptions` from `Toon.DotNet`
 - Streams are left open after read and write calls
-- 69 unit tests, 100% passing, 88% code coverage
+- 99 unit tests, 100% passing
 
 ---
 
@@ -157,6 +165,42 @@ string toon = "id,name\n1,Alice\n2,Bob".CsvToToon();
 string csv = "[2]{id,name}:\n  1,Alice\n  2,Bob".ToonToCsv();
 ```
 
+### Convert a multi-dataset TOON document to one CSV file per dataset
+
+```csharp
+string toon = "Sales[1]{id,amount}:\n  1,9.99\nCustomers[1]{id,name}:\n  1,Alice";
+
+var written = ToonCsv.ToCsvFiles(toon, "./export");
+// written["Sales"]     -> "./export/Sales.csv"
+// written["Customers"] -> "./export/Customers.csv"
+
+// In-memory only, no files
+var csvByName = ToonCsv.ToCsvDictionary(toon);
+// csvByName["Sales"]     -> "id,amount\r\n1,9.99\r\n"
+// csvByName["Customers"] -> "id,name\r\n1,Alice\r\n"
+```
+
+### Combine a directory of CSV files into one multi-dataset TOON document
+
+```csharp
+// ./data/Sales.csv, ./data/Customers.csv, ...
+string toon = ToonCsv.FromCsvFiles("./data");
+// Sales[1]{id,amount}:
+//   1,9.99
+// Customers[1]{id,name}:
+//   1,Alice
+
+// Or straight to a .toon file
+ToonCsv.SaveCsvFilesAsToon("./data", "combined.toon");
+
+// From an in-memory dictionary instead of files
+string toon = ToonCsv.FromCsvDictionary(new Dictionary<string, string>
+{
+    ["Sales"] = "id,amount\n1,9.99",
+    ["Customers"] = "id,name\n1,Alice",
+});
+```
+
 ---
 
 ## API overview
@@ -183,6 +227,21 @@ string csv = "[2]{id,name}:\n  1,Alice\n  2,Bob".ToonToCsv();
 | `ToonCsv.ToCsvFile(string toon, string csvPath, DecodeOptions?)` | Converts a TOON string to CSV and writes it to a file |
 | `ToonCsv.ToCsvAsync(string toon, string csvPath, DecodeOptions?, CancellationToken)` | Asynchronously converts a TOON string to CSV and writes it to a file |
 | `ToonCsv.ConvertToonToCsv(string toonPath, string csvPath, DecodeOptions?)` | Converts a `.toon` file to a `.csv` file |
+
+#### Multi-dataset (TOON object ↔ multiple CSVs)
+
+Root value must be an object whose top-level values are each an array of objects — see [Multi-dataset support](#multi-dataset-support) above.
+
+| Method | Description |
+|---|---|
+| `ToonCsv.ToCsvDictionary(string toon, DecodeOptions?)` | Converts a multi-dataset TOON document to a `Dictionary<string, string>` (dataset name → CSV content) |
+| `ToonCsv.ToCsvFiles(string toon, string outputDirectory, DecodeOptions?)` | Writes one `.csv` file per dataset to a directory (created if missing); returns dataset name → file path written |
+| `ToonCsv.ToCsvFilesAsync(string toon, string outputDirectory, DecodeOptions?, CancellationToken)` | Asynchronous version of `ToCsvFiles` |
+| `ToonCsv.FromCsvDictionary(IReadOnlyDictionary<string, string> csvByName, EncodeOptions?)` | Combines named CSV content into one multi-dataset TOON document |
+| `ToonCsv.FromCsvFiles(string inputDirectory, EncodeOptions?, string searchPattern = "*.csv")` | Reads every matching CSV file in a directory and combines them into one multi-dataset TOON document, keyed by file name |
+| `ToonCsv.FromCsvFilesAsync(string inputDirectory, EncodeOptions?, string searchPattern, CancellationToken)` | Asynchronous version of `FromCsvFiles` |
+| `ToonCsv.SaveCsvFilesAsToon(string inputDirectory, string toonPath, EncodeOptions?, string searchPattern)` | Reads a directory of CSV files and saves the combined result as a `.toon` file |
+| `ToonCsv.SaveCsvFilesAsToonAsync(string inputDirectory, string toonPath, EncodeOptions?, string searchPattern, CancellationToken)` | Asynchronous version of `SaveCsvFilesAsToon` |
 
 ---
 

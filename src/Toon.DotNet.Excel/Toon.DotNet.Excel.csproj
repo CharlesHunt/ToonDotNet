@@ -7,7 +7,7 @@
     <Nullable>enable</Nullable>
     <LangVersion>latest</LangVersion>
     <PackageId>Toon.DotNet.Excel</PackageId>
-    <Version>3.3.2</Version>    
+    <Version>3.4.0</Version>
     <Authors>Charles Hunt</Authors>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageProjectUrl>https://github.com/CharlesHunt/ToonDotNet/tree/master/src/ToonDotNet.Excel</PackageProjectUrl>
@@ -18,7 +18,7 @@
     <PackageTags>toon;excel;xlsx;serialization;llm;token-efficiency</PackageTags>    
     <Title>Toon.DotNet.Excel</Title>
     <PackageIcon>hrd.png</PackageIcon>
-    <PackageVersion>3.3.2.0</PackageVersion>
+    <PackageVersion>3.4.0.0</PackageVersion>
   </PropertyGroup>
 
   <ItemGroup>

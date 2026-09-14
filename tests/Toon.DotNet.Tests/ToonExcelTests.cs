@@ -1208,4 +1208,121 @@ public class ToonExcelTests : IDisposable
         await Assert.ThrowsAsync<OperationCanceledException>(() =>
             "[1]{id}:\n  1".ToExcelWorkbookAsync(cancellationToken: cts.Token));
     }
+
+    // =========================================================================
+    // Decode: object-of-uniform-objects values (TOON_V4.md phase 6). This
+    // shape is what v4.0.0's keyed tabular form (§9.5 RFC #57, now the
+    // default encoder output) decodes to — but TOON's decoded JsonElement
+    // can't distinguish "was written via keyed-tabular syntax" from
+    // "was written via plain nested §8 object syntax," so this fix
+    // improves the general case, not v4 syntax specifically. Before this
+    // fix, JsonElementToWorkbook only gave a proper worksheet to ARRAY
+    // values; any other value (including this shape) collapsed an entire
+    // sheet's worth of tabular data into unreadable raw JSON in cell A1.
+    // =========================================================================
+
+    [Fact]
+    public void Decode_KeyedTabularToon_CreatesProperWorksheetNotRawJson()
+    {
+        using var wb = ToonExcel.Decode("Sales[2:]{age,city}:\n  alice: 30,Berlin\n  bob: 25,Oslo");
+
+        var ws = wb.Worksheet("Sales");
+        var used = ws.RangeUsed();
+        Assert.NotNull(used);
+        Assert.True(used!.RowCount() > 1, "Expected a header row plus data rows, not a single JSON-blob cell.");
+    }
+
+    [Fact]
+    public void Decode_KeyedTabularToon_FirstColumnHoldsEntryKeys()
+    {
+        using var wb = ToonExcel.Decode("Sales[2:]{age,city}:\n  alice: 30,Berlin\n  bob: 25,Oslo");
+
+        var ws = wb.Worksheet("Sales");
+        Assert.Equal("alice", ws.Cell(2, 1).GetString());
+        Assert.Equal("bob", ws.Cell(3, 1).GetString());
+    }
+
+    [Fact]
+    public void Decode_KeyedTabularToon_RemainingColumnsHoldFieldValues()
+    {
+        using var wb = ToonExcel.Decode("Sales[2:]{age,city}:\n  alice: 30,Berlin\n  bob: 25,Oslo");
+
+        var ws = wb.Worksheet("Sales");
+        Assert.Equal("age", ws.Cell(1, 2).GetString());
+        Assert.Equal("city", ws.Cell(1, 3).GetString());
+        Assert.Equal(30.0, ws.Cell(2, 2).GetDouble());
+        Assert.Equal("Berlin", ws.Cell(2, 3).GetString());
+        Assert.Equal(25.0, ws.Cell(3, 2).GetDouble());
+        Assert.Equal("Oslo", ws.Cell(3, 3).GetString());
+    }
+
+    [Fact]
+    public void Decode_RootKeyedTabularToon_StillTreatsTopLevelKeysAsSheetNames()
+    {
+        // Deliberately NOT covered by this fix: at the ROOT, an object's
+        // top-level keys already have an established, well-defined
+        // meaning ("one worksheet per key" — the multi-dataset
+        // convention), which is a genuinely different, conflicting
+        // interpretation of the same shape from "this whole object is
+        // one keyed-tabular dataset." Reinterpreting a root object whose
+        // keys happen to have object values would silently break that
+        // established multi-dataset convention for a merely-coincidental
+        // shape match, so root-level dispatch is intentionally left
+        // unchanged — this fix only applies to a per-key VALUE, where no
+        // such ambiguity exists (that value's role, "this sheet's
+        // content," is already fixed by the loop).
+        using var wb = ToonExcel.Decode("[2:]{age,city}:\n  alice: 30,Berlin\n  bob: 25,Oslo");
+
+        Assert.Equal(2, wb.Worksheets.Count);
+        Assert.NotNull(wb.Worksheet("alice"));
+        Assert.NotNull(wb.Worksheet("bob"));
+    }
+
+    [Fact]
+    public void Decode_ObjectOfObjectsWithMissingFieldInSomeEntry_LeavesCellBlank()
+    {
+        // Mirrors the existing array-of-objects leniency: columns come
+        // from the first entry's keys; a later entry missing a field
+        // just leaves that cell blank rather than erroring.
+        using var wb = ToonExcel.Decode("data:\n  alice:\n    age: 30\n    city: Berlin\n  bob:\n    age: 25");
+
+        var ws = wb.Worksheet("data");
+        Assert.Equal("Berlin", ws.Cell(2, 3).GetString());
+        Assert.True(ws.Cell(3, 3).IsEmpty());
+    }
+
+    [Fact]
+    public void Decode_SingleEntryObjectOfObjects_StillCreatesProperWorksheet()
+    {
+        // The encoder only emits keyed tabular form for >=2 entries, but
+        // the decode-side improvement isn't specific to that syntax — a
+        // single-entry object of objects should still get a real
+        // worksheet, not a JSON blob.
+        using var wb = ToonExcel.Decode("data:\n  alice:\n    age: 30");
+
+        var ws = wb.Worksheet("data");
+        Assert.Equal("alice", ws.Cell(2, 1).GetString());
+        Assert.Equal(30.0, ws.Cell(2, 2).GetDouble());
+    }
+
+    [Fact]
+    public void Decode_ObjectWithScalarFields_StillUsesRawJsonFallback()
+    {
+        // Regression guard: an object whose values are NOT themselves
+        // objects (e.g. plain config-shaped data) must keep the existing
+        // raw-JSON-in-cell-A1 fallback — this fix only applies when the
+        // first entry's value is itself an object.
+        using var wb = ToonExcel.Decode("config:\n  theme: dark\n  fontSize: 12");
+
+        var ws = wb.Worksheet("config");
+        Assert.Contains("theme", ws.Cell(1, 1).GetString());
+    }
+
+    [Fact]
+    public void Decode_EmptyObjectValue_DoesNotThrow()
+    {
+        using var wb = ToonExcel.Decode("data:");
+
+        Assert.NotNull(wb.Worksheet("data"));
+    }
 }

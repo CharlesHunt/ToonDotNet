@@ -13,10 +13,11 @@ internal static class Primitives
     /// </summary>
     /// <param name="element">The primitive element to encode.</param>
     /// <param name="delimiter">The delimiter character for context.</param>
+    /// <param name="specVersion">Which TOON grammar's quoting rules to apply — see <see cref="StringUtils.EscapeString"/>.</param>
     /// <returns>The encoded string representation.</returns>
-    public static string EncodePrimitive(JsonElement element, char delimiter)
+    public static string EncodePrimitive(JsonElement element, char delimiter, ToonSpecVersion specVersion = ToonSpecVersion.V4)
     {
-        return LiteralUtils.FormatPrimitive(element, delimiter);
+        return LiteralUtils.FormatPrimitive(element, delimiter, specVersion);
     }
 
     /// <summary>
@@ -126,10 +127,11 @@ internal static class Primitives
     /// </summary>
     /// <param name="elements">The primitive elements to encode and join.</param>
     /// <param name="delimiter">The delimiter to use.</param>
+    /// <param name="specVersion">Which TOON grammar's quoting rules to apply — see <see cref="StringUtils.EscapeString"/>.</param>
     /// <returns>The joined string.</returns>
-    public static string EncodeAndJoinPrimitives(JsonElement[] elements, char delimiter)
+    public static string EncodeAndJoinPrimitives(JsonElement[] elements, char delimiter, ToonSpecVersion specVersion = ToonSpecVersion.V4)
     {
-        return LiteralUtils.FormatAndJoinPrimitives(elements, delimiter);
+        return LiteralUtils.FormatAndJoinPrimitives(elements, delimiter, specVersion);
     }
 
     /// <summary>
@@ -139,17 +141,18 @@ internal static class Primitives
     /// <param name="delimiter">The delimiter to use.</param>
     /// <param name="key">Optional key name.</param>
     /// <param name="lengthMarker">Optional length marker.</param>
+    /// <param name="specVersion">Which TOON grammar's quoting rules to apply — see <see cref="StringUtils.EscapeString"/>.</param>
     /// <returns>The formatted line.</returns>
-    public static string FormatInlineArrayLine(JsonElement[] elements, char delimiter, string? key = null, char? lengthMarker = null)
+    public static string FormatInlineArrayLine(JsonElement[] elements, char delimiter, string? key = null, char? lengthMarker = null, ToonSpecVersion specVersion = ToonSpecVersion.V4)
     {
         string header = FormatHeader(elements.Length, key, delimiter, lengthMarker);
-        
+
         if (elements.Length == 0)
         {
             return header;
         }
 
-        string values = EncodeAndJoinPrimitives(elements, delimiter);
+        string values = EncodeAndJoinPrimitives(elements, delimiter, specVersion);
         return $"{header} {values}";
     }
 }

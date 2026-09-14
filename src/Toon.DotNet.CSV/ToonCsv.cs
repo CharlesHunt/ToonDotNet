@@ -238,6 +238,273 @@ public static class ToonCsv
     }
 
     // -------------------------------------------------------------------------
+    // Multi-dataset: TOON → multiple CSVs
+    // -------------------------------------------------------------------------
+    //
+    // CSV has no native multi-table concept, so — mirroring
+    // Toon.DotNet.Excel's "one worksheet per top-level key" — the closest
+    // equivalent here is "one CSV per top-level key," the same convention
+    // database/BI export tools use when exporting multiple tables. These
+    // methods require a root TOON *object* (one array per dataset); a root
+    // array (a single, unnamed dataset) is out of scope for them — use
+    // ToCsv/FromCsv for that, rather than inventing a default key name.
+
+    /// <summary>
+    /// Converts a multi-dataset TOON document (a root object whose
+    /// top-level values are each an array of objects) to CSV, one entry
+    /// per top-level key.
+    /// </summary>
+    /// <param name="toon">The TOON string to convert. Root value must be an object whose top-level values are each an array of objects.</param>
+    /// <param name="options">Optional decoding options. If null, defaults are used.</param>
+    /// <returns>A dictionary mapping each top-level key to its CSV content.</returns>
+    /// <exception cref="ArgumentException">Thrown when <paramref name="toon"/> is null or empty.</exception>
+    /// <exception cref="InvalidOperationException">Thrown when the TOON root is not an object, or when a top-level value isn't an array of objects.</exception>
+    /// <example>
+    /// <code>
+    /// var csvByName = ToonCsv.ToCsvDictionary(
+    ///     "Sales[1]{id,amount}:\n  1,9.99\nCustomers[1]{id,name}:\n  1,Alice");
+    /// // csvByName["Sales"]     -> "id,amount\r\n1,9.99\r\n"
+    /// // csvByName["Customers"] -> "id,name\r\n1,Alice\r\n"
+    /// </code>
+    /// </example>
+    public static Dictionary<string, string> ToCsvDictionary(string toon, DecodeOptions? options = null)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(toon);
+        return ToCsvDictionary(Toon.Decode(toon, options));
+    }
+
+    /// <summary>
+    /// Converts a multi-dataset TOON document to CSV files, one file per
+    /// top-level key, written to <paramref name="outputDirectory"/>
+    /// (created if it doesn't already exist). Key names are sanitized for
+    /// filesystem safety and de-duplicated with a numeric suffix if
+    /// sanitization collides two different keys onto the same file name.
+    /// </summary>
+    /// <param name="toon">The TOON string to convert. Root value must be an object whose top-level values are each an array of objects.</param>
+    /// <param name="outputDirectory">Directory to write the CSV files into. Created if it doesn't already exist.</param>
+    /// <param name="options">Optional decoding options. If null, defaults are used.</param>
+    /// <returns>A dictionary mapping each top-level key to the full path of the file written for it.</returns>
+    /// <exception cref="ArgumentException">Thrown when <paramref name="toon"/> or <paramref name="outputDirectory"/> is null or empty.</exception>
+    /// <exception cref="InvalidOperationException">Thrown when the TOON root is not an object, or when a top-level value isn't an array of objects.</exception>
+    /// <example>
+    /// <code>
+    /// var written = ToonCsv.ToCsvFiles(toon, "./export");
+    /// // written["Sales"]     -> "./export/Sales.csv"
+    /// // written["Customers"] -> "./export/Customers.csv"
+    /// </code>
+    /// </example>
+    public static Dictionary<string, string> ToCsvFiles(string toon, string outputDirectory, DecodeOptions? options = null)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(toon);
+        ArgumentException.ThrowIfNullOrEmpty(outputDirectory);
+
+        var csvByName = ToCsvDictionary(toon, options);
+        Directory.CreateDirectory(outputDirectory);
+
+        var writtenPaths = new Dictionary<string, string>();
+        var usedFileNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var (name, csv) in csvByName)
+        {
+            var fileName = UniqueCsvFileName(name, usedFileNames);
+            var path = Path.Combine(outputDirectory, fileName);
+            File.WriteAllText(path, csv);
+            writtenPaths[name] = path;
+        }
+
+        return writtenPaths;
+    }
+
+    /// <summary>
+    /// Asynchronously converts a multi-dataset TOON document to CSV files,
+    /// one file per top-level key. See <see cref="ToCsvFiles"/>.
+    /// </summary>
+    /// <param name="toon">The TOON string to convert. Root value must be an object whose top-level values are each an array of objects.</param>
+    /// <param name="outputDirectory">Directory to write the CSV files into. Created if it doesn't already exist.</param>
+    /// <param name="options">Optional decoding options. If null, defaults are used.</param>
+    /// <param name="cancellationToken">Token to cancel the operation.</param>
+    /// <returns>A dictionary mapping each top-level key to the full path of the file written for it.</returns>
+    /// <exception cref="ArgumentException">Thrown when <paramref name="toon"/> or <paramref name="outputDirectory"/> is null or empty.</exception>
+    /// <exception cref="InvalidOperationException">Thrown when the TOON root is not an object, or when a top-level value isn't an array of objects.</exception>
+    public static async Task<Dictionary<string, string>> ToCsvFilesAsync(
+        string toon,
+        string outputDirectory,
+        DecodeOptions? options = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(toon);
+        ArgumentException.ThrowIfNullOrEmpty(outputDirectory);
+
+        var csvByName = ToCsvDictionary(toon, options);
+        Directory.CreateDirectory(outputDirectory);
+
+        var writtenPaths = new Dictionary<string, string>();
+        var usedFileNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var (name, csv) in csvByName)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var fileName = UniqueCsvFileName(name, usedFileNames);
+            var path = Path.Combine(outputDirectory, fileName);
+            await File.WriteAllTextAsync(path, csv, cancellationToken).ConfigureAwait(false);
+            writtenPaths[name] = path;
+        }
+
+        return writtenPaths;
+    }
+
+    // -------------------------------------------------------------------------
+    // Multi-dataset: multiple CSVs → TOON (the reverse direction)
+    // -------------------------------------------------------------------------
+
+    /// <summary>
+    /// Combines multiple named CSV datasets into a single multi-dataset
+    /// TOON document: a root object with one key per dataset name, each
+    /// value the corresponding array of rows. The reverse of
+    /// <see cref="ToCsvDictionary"/> — but note this always produces a
+    /// root object, even for a single entry; it never unwraps to a bare
+    /// root array (use <see cref="FromCsv(string, EncodeOptions?)"/> for
+    /// that single-dataset case).
+    /// </summary>
+    /// <param name="csvByName">A mapping of dataset name to CSV content.</param>
+    /// <param name="options">Optional encoding options. If null, defaults are used.</param>
+    /// <returns>A TOON string representing a root object with one array per entry.</returns>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="csvByName"/> is null.</exception>
+    /// <example>
+    /// <code>
+    /// var toon = ToonCsv.FromCsvDictionary(new Dictionary&lt;string, string&gt;
+    /// {
+    ///     ["Sales"] = "id,amount\n1,9.99",
+    ///     ["Customers"] = "id,name\n1,Alice",
+    /// });
+    /// // Sales[1]{id,amount}:
+    /// //   1,9.99
+    /// // Customers[1]{id,name}:
+    /// //   1,Alice
+    /// </code>
+    /// </example>
+    public static string FromCsvDictionary(IReadOnlyDictionary<string, string> csvByName, EncodeOptions? options = null)
+    {
+        ArgumentNullException.ThrowIfNull(csvByName);
+
+        var datasets = new Dictionary<string, object?>();
+        foreach (var (name, csv) in csvByName)
+        {
+            using var reader = new StringReader(csv ?? string.Empty);
+            datasets[name] = ParseCsv(reader);
+        }
+
+        return Toon.Encode(datasets, options);
+    }
+
+    /// <summary>
+    /// Reads all CSV files in <paramref name="inputDirectory"/> matching
+    /// <paramref name="searchPattern"/> and combines them into a single
+    /// multi-dataset TOON document — a root object with one key per file
+    /// (named after the file, extension stripped), each value the file's
+    /// rows. Files are processed in ordinal file-path order for
+    /// deterministic output. The reverse of <see cref="ToCsvFiles"/>.
+    /// </summary>
+    /// <param name="inputDirectory">Directory to read CSV files from.</param>
+    /// <param name="options">Optional encoding options. If null, defaults are used.</param>
+    /// <param name="searchPattern">Glob pattern for matching CSV files. Defaults to <c>"*.csv"</c>.</param>
+    /// <returns>A TOON string representing a root object with one array per file. An empty object (<c>{}</c>) if no files match.</returns>
+    /// <exception cref="ArgumentException">Thrown when <paramref name="inputDirectory"/> is null or empty.</exception>
+    /// <exception cref="DirectoryNotFoundException">Thrown when the directory does not exist.</exception>
+    public static string FromCsvFiles(string inputDirectory, EncodeOptions? options = null, string searchPattern = "*.csv")
+    {
+        ArgumentException.ThrowIfNullOrEmpty(inputDirectory);
+        if (!Directory.Exists(inputDirectory))
+            throw new DirectoryNotFoundException($"Directory not found: {inputDirectory}");
+
+        var datasets = new Dictionary<string, object?>();
+        foreach (var path in Directory.GetFiles(inputDirectory, searchPattern).OrderBy(p => p, StringComparer.Ordinal))
+        {
+            var name = Path.GetFileNameWithoutExtension(path);
+            using var reader = new StreamReader(path, Encoding.UTF8);
+            datasets[name] = ParseCsv(reader);
+        }
+
+        return Toon.Encode(datasets, options);
+    }
+
+    /// <summary>
+    /// Asynchronously reads all CSV files in a directory and combines
+    /// them into a single multi-dataset TOON document. See
+    /// <see cref="FromCsvFiles"/>.
+    /// </summary>
+    /// <param name="inputDirectory">Directory to read CSV files from.</param>
+    /// <param name="options">Optional encoding options. If null, defaults are used.</param>
+    /// <param name="searchPattern">Glob pattern for matching CSV files. Defaults to <c>"*.csv"</c>.</param>
+    /// <param name="cancellationToken">Token to cancel the operation.</param>
+    /// <returns>A TOON string representing a root object with one array per file. An empty object (<c>{}</c>) if no files match.</returns>
+    /// <exception cref="ArgumentException">Thrown when <paramref name="inputDirectory"/> is null or empty.</exception>
+    /// <exception cref="DirectoryNotFoundException">Thrown when the directory does not exist.</exception>
+    public static async Task<string> FromCsvFilesAsync(
+        string inputDirectory,
+        EncodeOptions? options = null,
+        string searchPattern = "*.csv",
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(inputDirectory);
+        if (!Directory.Exists(inputDirectory))
+            throw new DirectoryNotFoundException($"Directory not found: {inputDirectory}");
+
+        var datasets = new Dictionary<string, object?>();
+        foreach (var path in Directory.GetFiles(inputDirectory, searchPattern).OrderBy(p => p, StringComparer.Ordinal))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var name = Path.GetFileNameWithoutExtension(path);
+            var content = await File.ReadAllTextAsync(path, cancellationToken).ConfigureAwait(false);
+            using var reader = new StringReader(content);
+            datasets[name] = ParseCsv(reader);
+        }
+
+        return Toon.Encode(datasets, options);
+    }
+
+    /// <summary>
+    /// Reads all CSV files in a directory and saves the combined
+    /// multi-dataset TOON document to a file. Convenience wrapper over
+    /// <see cref="FromCsvFiles"/> plus writing the result to disk.
+    /// </summary>
+    /// <param name="inputDirectory">Directory to read CSV files from.</param>
+    /// <param name="toonPath">Path to the destination .toon file to create or overwrite.</param>
+    /// <param name="options">Optional encoding options. If null, defaults are used.</param>
+    /// <param name="searchPattern">Glob pattern for matching CSV files. Defaults to <c>"*.csv"</c>.</param>
+    /// <exception cref="ArgumentException">Thrown when <paramref name="inputDirectory"/> or <paramref name="toonPath"/> is null or empty.</exception>
+    /// <exception cref="DirectoryNotFoundException">Thrown when the directory does not exist.</exception>
+    public static void SaveCsvFilesAsToon(string inputDirectory, string toonPath, EncodeOptions? options = null, string searchPattern = "*.csv")
+    {
+        ArgumentException.ThrowIfNullOrEmpty(toonPath);
+        File.WriteAllText(toonPath, FromCsvFiles(inputDirectory, options, searchPattern));
+    }
+
+    /// <summary>
+    /// Asynchronously reads all CSV files in a directory and saves the
+    /// combined multi-dataset TOON document to a file. See
+    /// <see cref="SaveCsvFilesAsToon"/>.
+    /// </summary>
+    /// <param name="inputDirectory">Directory to read CSV files from.</param>
+    /// <param name="toonPath">Path to the destination .toon file to create or overwrite.</param>
+    /// <param name="options">Optional encoding options. If null, defaults are used.</param>
+    /// <param name="searchPattern">Glob pattern for matching CSV files. Defaults to <c>"*.csv"</c>.</param>
+    /// <param name="cancellationToken">Token to cancel the operation.</param>
+    /// <exception cref="ArgumentException">Thrown when <paramref name="inputDirectory"/> or <paramref name="toonPath"/> is null or empty.</exception>
+    /// <exception cref="DirectoryNotFoundException">Thrown when the directory does not exist.</exception>
+    public static async Task SaveCsvFilesAsToonAsync(
+        string inputDirectory,
+        string toonPath,
+        EncodeOptions? options = null,
+        string searchPattern = "*.csv",
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(toonPath);
+        var toon = await FromCsvFilesAsync(inputDirectory, options, searchPattern, cancellationToken).ConfigureAwait(false);
+        await File.WriteAllTextAsync(toonPath, toon, cancellationToken).ConfigureAwait(false);
+    }
+
+    // -------------------------------------------------------------------------
     // Private helpers
     // -------------------------------------------------------------------------
 
@@ -312,6 +579,71 @@ public static class ToonCsv
 
         char next = value[start + 1];
         return next >= '0' && next <= '9';
+    }
+
+    /// <summary>
+    /// Converts a decoded multi-dataset TOON object into one CSV string
+    /// per top-level key, reusing <see cref="WriteCsv"/>'s array-of-objects
+    /// validation and error messages for each dataset.
+    /// </summary>
+    private static Dictionary<string, string> ToCsvDictionary(JsonElement element)
+    {
+        if (element.ValueKind != JsonValueKind.Object)
+            throw new InvalidOperationException(
+                $"TOON root must be an object to convert to multiple CSV datasets (one top-level key per dataset), but got {element.ValueKind}. Use ToCsv for a single root array.");
+
+        var result = new Dictionary<string, string>();
+        foreach (var property in element.EnumerateObject())
+        {
+            if (property.Value.ValueKind != JsonValueKind.Array)
+                throw new InvalidOperationException(
+                    $"Top-level key '{property.Name}' must be an array of objects to convert to CSV, but got {property.Value.ValueKind}.");
+
+            result[property.Name] = WriteCsv(property.Value);
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Builds a unique, filesystem-safe CSV file name (including
+    /// extension) for a dataset key, tracking names already used in
+    /// <paramref name="usedFileNames"/> so two keys that sanitize to the
+    /// same base name don't collide (appends a numeric suffix instead).
+    /// </summary>
+    private static string UniqueCsvFileName(string key, HashSet<string> usedFileNames)
+    {
+        var baseName = SanitizeFileNameKey(key);
+        var candidate = $"{baseName}.csv";
+        if (usedFileNames.Add(candidate))
+            return candidate;
+
+        for (int n = 2; n <= 9999; n++)
+        {
+            candidate = $"{baseName} ({n}).csv";
+            if (usedFileNames.Add(candidate))
+                return candidate;
+        }
+
+        // Fallback: let File.WriteAllText throw for the truly unusual case
+        // of 9999 colliding keys.
+        return candidate;
+    }
+
+    /// <summary>
+    /// Strips characters invalid in file names on the current platform
+    /// and trims to a practical length, falling back to a generic name if
+    /// nothing usable remains.
+    /// </summary>
+    private static string SanitizeFileNameKey(string key)
+    {
+        var invalid = Path.GetInvalidFileNameChars();
+        var sanitized = new string(key.Where(c => !invalid.Contains(c)).ToArray()).Trim();
+
+        if (sanitized.Length > 100)
+            sanitized = sanitized[..100];
+
+        return string.IsNullOrWhiteSpace(sanitized) ? "table" : sanitized;
     }
 
     private static string WriteCsv(JsonElement element)

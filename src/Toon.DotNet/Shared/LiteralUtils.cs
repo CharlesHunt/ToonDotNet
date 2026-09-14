@@ -12,8 +12,9 @@ internal static class LiteralUtils
     /// Parses a primitive token into a JsonElement.
     /// </summary>
     /// <param name="token">The token to parse.</param>
+    /// <param name="legacyCompatibility">When true, trims the token with the pre-v4 broader-whitespace rule instead of spec §12's U+0020-only rule.</param>
     /// <returns>A JsonElement representing the parsed value.</returns>
-    public static JsonElement ParsePrimitiveToken(string token)
+    public static JsonElement ParsePrimitiveToken(string token, bool legacyCompatibility = false)
     {
         if (token == null)
             return JsonDocument.Parse("null").RootElement;
@@ -23,7 +24,7 @@ internal static class LiteralUtils
         if (token.Length == 0)
             return JsonDocument.Parse("\"\"").RootElement;
 
-        string trimmed = token.Trim();
+        string trimmed = StringUtils.TrimToken(token, legacyCompatibility);
 
         // Handle quoted strings - but validate they are properly quoted
 #if NETSTANDARD2_0
@@ -131,8 +132,9 @@ internal static class LiteralUtils
     /// </summary>
     /// <param name="element">The JsonElement to format.</param>
     /// <param name="delimiter">The delimiter character (used for escaping if needed).</param>
+    /// <param name="specVersion">Which TOON grammar's quoting rules to apply — see <see cref="StringUtils.EscapeString"/>.</param>
     /// <returns>The formatted string representation.</returns>
-    public static string FormatPrimitive(JsonElement element, char delimiter)
+    public static string FormatPrimitive(JsonElement element, char delimiter, ToonSpecVersion specVersion = ToonSpecVersion.V4)
     {
         return element.ValueKind switch
         {
@@ -140,7 +142,7 @@ internal static class LiteralUtils
             JsonValueKind.True => Constants.TrueLiteral,
             JsonValueKind.False => Constants.FalseLiteral,
             JsonValueKind.Number => FormatNumber(element),
-            JsonValueKind.String => StringUtils.EscapeString(element.GetString() ?? "", delimiter),
+            JsonValueKind.String => StringUtils.EscapeString(element.GetString() ?? "", delimiter, specVersion),
             _ => throw new ArgumentException($"Cannot format {element.ValueKind} as primitive")
         };
     }
@@ -266,10 +268,11 @@ internal static class LiteralUtils
     /// </summary>
     /// <param name="elements">The primitive elements to format and join.</param>
     /// <param name="delimiter">The delimiter to use.</param>
+    /// <param name="specVersion">Which TOON grammar's quoting rules to apply — see <see cref="StringUtils.EscapeString"/>.</param>
     /// <returns>The joined string.</returns>
-    public static string FormatAndJoinPrimitives(JsonElement[] elements, char delimiter)
+    public static string FormatAndJoinPrimitives(JsonElement[] elements, char delimiter, ToonSpecVersion specVersion = ToonSpecVersion.V4)
     {
-        var formattedValues = elements.Select(e => FormatPrimitive(e, delimiter));
+        var formattedValues = elements.Select(e => FormatPrimitive(e, delimiter, specVersion));
         return string.Join(delimiter.ToString(), formattedValues);
     }
 }
