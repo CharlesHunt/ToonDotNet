@@ -2,6 +2,7 @@
 using ClosedXML.Excel;
 
 using ToonFormat;
+using ToonFormat.Csv;
 using ToonFormat.Excel;
 
 Console.WriteLine("=== ToonFormat .NET Example ===\n");
@@ -190,6 +191,125 @@ using (var wb = BuildSampleWorkbook())
     string toon = wb.Worksheet("Products").ToToon(opts);
     Console.WriteLine("Products worksheet with '|' delimiter and '#' length marker:");
     Console.WriteLine(toon);
+}
+Console.WriteLine();
+
+// ---------------------------------------------------------------------------
+// TOON V4 Feature Examples
+// ---------------------------------------------------------------------------
+Console.WriteLine("\n=== TOON V4 Feature Examples ===\n");
+
+// Example 13: Nested field groups (v4.0.0 RFC #46)
+Console.WriteLine("13. Nested Field Groups (v4.0.0 RFC #46):");
+var orders = new
+{
+    orders = new[]
+    {
+        new { id = 1, customer = new { name = "Ada", country = "DK" }, total = 99.00 },
+        new { id = 2, customer = new { name = "Bob", country = "UK" }, total = 149.00 }
+    }
+};
+string nestedFieldGroupToon = Toon.Encode(orders);
+Console.WriteLine("A nested-uniform column (\"customer\") collapses into a nested field group header:");
+Console.WriteLine(nestedFieldGroupToon);
+Console.WriteLine();
+
+// Example 14: Keyed tabular form for objects (v4.0.0 RFC #57)
+Console.WriteLine("14. Keyed Tabular Form for Objects (v4.0.0 RFC #57):");
+var usersByUsername = new
+{
+    users = new Dictionary<string, object>
+    {
+        ["alice"] = new { age = 30, city = "Berlin" },
+        ["bob"] = new { age = 25, city = "Oslo" }
+    }
+};
+string keyedTabularToon = Toon.Encode(usersByUsername);
+Console.WriteLine("An object of uniform objects collapses into keyed tabular form (note the \"[N:]\" header):");
+Console.WriteLine(keyedTabularToon);
+Console.WriteLine();
+
+// Example 15: EncodeOptions.SpecVersion — V4 (default) vs V3 (legacy) output
+Console.WriteLine("15. EncodeOptions.SpecVersion — V4 (default) vs V3 (legacy compatibility):");
+Console.WriteLine("V4 (default) output uses the nested field group from Example 13:");
+Console.WriteLine(Toon.Encode(orders));
+Console.WriteLine("V3 output (byte-for-byte v3.3.2 compatible) falls back to plain nested objects:");
+Console.WriteLine(Toon.Encode(orders, new EncodeOptions { SpecVersion = ToonSpecVersion.V3 }));
+Console.WriteLine();
+
+// Example 16: Full-line comments (v4.0.0 §5.1) — decode-side, always understood
+Console.WriteLine("16. Full-Line Comments (v4.0.0 §5.1):");
+string toonWithComments =
+    "# Employee roster\n" +
+    "employees[2]{id,name}:\n" +
+    "  1,Alice\n" +
+    "  # Bob just joined\n" +
+    "  2,Bob";
+var decodedWithComments = Toon.Decode(toonWithComments);
+Console.WriteLine("Source TOON (with comments):");
+Console.WriteLine(toonWithComments);
+Console.WriteLine($"\nDecoded (comments stripped): {JsonSerializer.Serialize(decodedWithComments)}");
+Console.WriteLine();
+
+// Example 17: DecodeOptions.LegacyCompatibility — token trimming scope
+Console.WriteLine("17. DecodeOptions.LegacyCompatibility — token trimming scope:");
+string toonWithTab = "name: \tAlice"; // a tab immediately after the colon
+var trimmedDefault = Toon.Decode(toonWithTab);
+var trimmedLegacy = Toon.Decode(toonWithTab, new DecodeOptions { LegacyCompatibility = true });
+Console.WriteLine("Default (v4) decoding trims only U+0020, so the tab is preserved in the value:");
+Console.WriteLine($"  \"{trimmedDefault.GetProperty("name").GetString()}\"");
+Console.WriteLine("LegacyCompatibility = true restores the old broader-whitespace trim:");
+Console.WriteLine($"  \"{trimmedLegacy.GetProperty("name").GetString()}\"");
+Console.WriteLine();
+
+// Example 18: Excel decoding of keyed tabular form to a proper worksheet
+Console.WriteLine("18. Excel: Decoding Keyed Tabular Form to a Proper Worksheet:");
+using (var wb = ToonExcel.Decode(keyedTabularToon))
+{
+    var sheet = wb.Worksheet("users");
+    Console.WriteLine($"Header row: {sheet.Cell(1, 1).GetString()}, {sheet.Cell(1, 2).GetString()}, {sheet.Cell(1, 3).GetString()}");
+    Console.WriteLine($"  Row 1: {sheet.Cell(2, 1).GetString()}, age={sheet.Cell(2, 2).GetDouble()}, city={sheet.Cell(2, 3).GetString()}");
+    Console.WriteLine($"  Row 2: {sheet.Cell(3, 1).GetString()}, age={sheet.Cell(3, 2).GetDouble()}, city={sheet.Cell(3, 3).GetString()}");
+}
+Console.WriteLine();
+
+// ---------------------------------------------------------------------------
+// Optional: save example CSV and Excel files to disk for manual inspection.
+// The test suite's own CSV/Excel temp files are deleted immediately after
+// each test runs, so this is the way to get real, persisted output files.
+// ---------------------------------------------------------------------------
+Console.WriteLine("=== Save Example Files ===\n");
+Console.Write("Write example CSV and Excel files to the application's base directory? (y/n): ");
+string? saveChoice = Console.ReadLine();
+
+if (string.Equals(saveChoice?.Trim(), "y", StringComparison.OrdinalIgnoreCase))
+{
+    string baseDir = AppContext.BaseDirectory;
+
+    // CSV: the flat "users" tabular array from Example 2.
+    string usersArrayToon = Toon.Encode(userData.users);
+    string csvOutputPath = Path.Combine(baseDir, "example_users.csv");
+    ToonCsv.ToCsvFile(usersArrayToon, csvOutputPath);
+    Console.WriteLine($"CSV written to:                        {csvOutputPath}");
+
+    // Excel: the sample multi-sheet workbook (Products + Customers).
+    string workbookOutputPath = Path.Combine(baseDir, "example_workbook.xlsx");
+    using (var wb = BuildSampleWorkbook())
+        wb.SaveAs(workbookOutputPath);
+    Console.WriteLine($"Excel workbook written to:             {workbookOutputPath}");
+
+    // Excel: the Example 14/18 keyed-tabular-form data, decoded straight
+    // to a worksheet — open this one to see the "key" column layout.
+    string keyedTabularOutputPath = Path.Combine(baseDir, "example_keyed_tabular.xlsx");
+    using (var wb = ToonExcel.Decode(keyedTabularToon))
+        wb.SaveAs(keyedTabularOutputPath);
+    Console.WriteLine($"Keyed-tabular-form Excel workbook written to: {keyedTabularOutputPath}");
+
+    Console.WriteLine("\nOpen these files directly to inspect the output.");
+}
+else
+{
+    Console.WriteLine("Skipped — no files written.");
 }
 Console.WriteLine();
 

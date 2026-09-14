@@ -326,7 +326,7 @@ Depending on the target framework, the following dependencies are used:
 ---
 ## Samples
 
-See `examples/Toon.DotNet.Example` for a runnable console sample (core encode/decode plus `Toon.DotNet.Excel` usage).
+See `examples/Toon.DotNet.Example` for a runnable console sample — core encode/decode, `Toon.DotNet.Excel` usage, and the v4-only features (nested field groups, keyed tabular form for objects, `EncodeOptions.SpecVersion`, full-line comments, `DecodeOptions.LegacyCompatibility`, and decoding keyed tabular form to a proper Excel worksheet).
 
 ---
 ## Versioning
