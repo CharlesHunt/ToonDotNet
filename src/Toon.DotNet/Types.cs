@@ -3,6 +3,33 @@ using System.Text.Json;
 namespace ToonFormat;
 
 /// <summary>
+/// The TOON grammar variant to target. See TOON_V4.md for the v4.0.0+
+/// feature/behavior gap list this drives.
+/// </summary>
+public enum ToonSpecVersion
+{
+    /// <summary>
+    /// TOON spec v3.x. Reproduces true v3.3.2 output for the behaviors
+    /// this enum gates: no nested field groups, no keyed tabular form,
+    /// and the narrower (leading '-' only) numeric-like quoting pattern
+    /// — the known v3.3.2 leading-plus round-trip gap included. Opt into
+    /// this when byte-for-byte v3.3.2 compatibility with a downstream
+    /// v3-only consumer matters more than the v4 fixes.
+    /// </summary>
+    V3,
+
+    /// <summary>
+    /// TOON spec v4.0.0+ (the line this library targets as of
+    /// <see cref="Constants.SpecVersion"/>, and <see cref="EncodeOptions.SpecVersion"/>'s
+    /// default). See TOON_V4.md for implementation status; encoding
+    /// gates nested field groups (§9.3 RFC #46), keyed tabular form
+    /// (§9.5 RFC #57), and leading-plus numeric-like quoting (§7.2)
+    /// behind this value.
+    /// </summary>
+    V4
+}
+
+/// <summary>
 /// Configuration options for encoding values to TOON format.
 /// </summary>
 public class EncodeOptions
@@ -22,6 +49,20 @@ public class EncodeOptions
     /// When set to '#', arrays render as [#N] instead of [N].
     /// </summary>
     public char? LengthMarker { get; set; }
+
+    /// <summary>
+    /// The TOON grammar variant to encode. Defaults to
+    /// <see cref="ToonSpecVersion.V4"/>, matching <see cref="Constants.SpecVersion"/>
+    /// — encoding uses nested field groups, keyed tabular form, and the
+    /// wider leading-plus numeric-like quoting pattern by default. Set to
+    /// <see cref="ToonSpecVersion.V3"/> to instead reproduce true v3.3.2
+    /// output (no nested field groups, no keyed tabular form, the
+    /// narrower leading-'-'-only quoting pattern) for compatibility with
+    /// a downstream v3-only consumer. See TOON_V4.md's "Version-aware
+    /// EncodeOptions / DecodeOptions" section for the full list of gated
+    /// behaviors.
+    /// </summary>
+    public ToonSpecVersion SpecVersion { get; set; } = ToonSpecVersion.V4;
 }
 
 /// <summary>
@@ -38,6 +79,44 @@ public class DecodeOptions
     /// When true, enforce strict validation of array lengths and tabular row counts.
     /// </summary>
     public bool Strict { get; set; } = true;
+
+    /// <summary>
+    /// When true, opts back into the pre-v4 decoder behavior for the
+    /// small set of TOON v4 semantic changes that genuinely conflict
+    /// with v3 behavior for the same input: token trimming scope (plain
+    /// whitespace trimming instead of spec §12's U+0020-only rule) and
+    /// the v4.1 misplaced-scalar rule (tolerating a bare, non-"- "-prefixed
+    /// line inside a list instead of erroring). Defaults to <c>false</c>
+    /// (correct v4 behavior). The decoder does not use a version
+    /// selector to decide what grammar it understands — see TOON_V4.md's
+    /// "superset grammar, not per-version detection" section — this flag
+    /// exists only for this narrow set of genuine conflicts, not general
+    /// v3-vs-v4 selection.
+    /// </summary>
+    public bool LegacyCompatibility { get; set; } = false;
+}
+
+/// <summary>
+/// A field in a tabular header (spec §9.3 arrays-of-objects, §9.5
+/// keyed-object tables). A leaf field (<see cref="Children"/> null or
+/// empty) maps directly to one row cell. A field with children is a
+/// nested field group (v4.0.0 RFC #46, e.g. <c>customer{name,country}</c>)
+/// whose row cells are the depth-first, pre-order walk of its own
+/// children — recursively, so nesting depth is unbounded per spec.
+/// </summary>
+internal class TabularField
+{
+#if NETSTANDARD2_0
+    public string Name { get; set; }
+#else
+    public required string Name { get; set; }
+#endif
+
+    /// <summary>
+    /// Null (or empty) for a leaf field; the nested field list for a
+    /// nested field group.
+    /// </summary>
+    public TabularField[]? Children { get; set; }
 }
 
 /// <summary>
@@ -61,14 +140,24 @@ internal class ArrayHeaderInfo
     public char Delimiter { get; set; }
 
     /// <summary>
-    /// Field names for tabular arrays (if any).
+    /// Field list for tabular arrays (if any), including any nested
+    /// field groups (spec §9.3, v4.0.0 RFC #46).
     /// </summary>
-    public string[]? Fields { get; set; }
+    public TabularField[]? Fields { get; set; }
 
     /// <summary>
     /// Whether the array header includes a length marker (#).
     /// </summary>
     public bool HasLengthMarker { get; set; }
+
+    /// <summary>
+    /// True when the bracket segment used the keyed-tabular grammar
+    /// (spec §6 keyed-seg, v4.0.0 RFC #57: "[" length ":" [delimsym] "]"),
+    /// e.g. "users[2:]{age,city}:". A keyed-tabular header decodes to an
+    /// <em>object</em> whose entries carry their own keys (§9.5), not an
+    /// array — despite reusing the same bracket/braces header shape.
+    /// </summary>
+    public bool IsKeyedTabular { get; set; }
 }
 
 /// <summary>

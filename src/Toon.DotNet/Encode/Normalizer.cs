@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace ToonFormat.Encode;
 
@@ -7,6 +8,13 @@ namespace ToonFormat.Encode;
 /// </summary>
 internal static class Normalizer
 {
+    private static readonly JsonSerializerOptions NormalizeOptions = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        WriteIndented = false,
+        Converters = { new NonFiniteDoubleConverter(), new NonFiniteSingleConverter() }
+    };
+
     /// <summary>
     /// Normalizes an input value to a JsonElement.
     /// </summary>
@@ -26,13 +34,55 @@ internal static class Normalizer
         }
 
         // Serialize to JSON and parse back to get JsonElement
-        string json = JsonSerializer.Serialize(input, new JsonSerializerOptions 
-        { 
-            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-            WriteIndented = false
-        });
-        
+        string json = JsonSerializer.Serialize(input, NormalizeOptions);
+
         return JsonDocument.Parse(json).RootElement;
+    }
+
+    /// <summary>
+    /// Writes NaN/+Infinity/-Infinity as JSON null (spec §3) instead of
+    /// System.Text.Json's default behavior of throwing. Named-literal
+    /// number handling isn't used here because it writes non-standard JSON
+    /// tokens (bare "NaN"/"Infinity") that JsonDocument.Parse cannot read
+    /// back.
+    /// </summary>
+    private sealed class NonFiniteDoubleConverter : JsonConverter<double>
+    {
+        public override double Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+            => reader.GetDouble();
+
+        public override void Write(Utf8JsonWriter writer, double value, JsonSerializerOptions options)
+        {
+            if (double.IsNaN(value) || double.IsInfinity(value))
+            {
+                writer.WriteNullValue();
+            }
+            else
+            {
+                writer.WriteNumberValue(value);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Single-precision counterpart of <see cref="NonFiniteDoubleConverter"/>.
+    /// </summary>
+    private sealed class NonFiniteSingleConverter : JsonConverter<float>
+    {
+        public override float Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+            => reader.GetSingle();
+
+        public override void Write(Utf8JsonWriter writer, float value, JsonSerializerOptions options)
+        {
+            if (float.IsNaN(value) || float.IsInfinity(value))
+            {
+                writer.WriteNullValue();
+            }
+            else
+            {
+                writer.WriteNumberValue(value);
+            }
+        }
     }
 
     /// <summary>

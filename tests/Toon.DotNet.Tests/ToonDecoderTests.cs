@@ -8,10 +8,12 @@ namespace ToonFormat.Tests;
 public class ToonDecoderTests
 {
     [Fact]
-    public void Decode_EmptyInput_ThrowsArgumentException()
+    public void Decode_NullInput_ThrowsArgumentException()
     {
         // Act & Assert
-        Assert.Throws<ArgumentException>(() => Toon.Decode(""));
+        // Null is a .NET argument-validation concern, not a spec-defined TOON
+        // document shape; empty string is covered separately in
+        // ToonV3ComplianceTests (spec §5: empty document decodes to {}).
         Assert.Throws<ArgumentException>(() => Toon.Decode((string)null!));
     }
 
@@ -589,9 +591,14 @@ metadata:
     [Fact]
     public void Decode_ListArrayWithoutListMarkers_ReturnsCorrectStructure()
     {
-        // Arrange - Non-standard but should handle gracefully in non-strict mode
+        // Arrange - Non-standard leniency. As of TOON_V4.md phase 4 step
+        // 16 (spec v4.1.0 §14.2), a list item without a "- " marker is a
+        // misplaced scalar and errors by default in both strict and
+        // non-strict mode; this old (non-spec-mandated) tolerance is now
+        // opt-in via LegacyCompatibility, exercised together with
+        // Strict = false exactly as this test always intended.
         var toon = "items[2]:\n  apple\n  banana";
-        var options = new DecodeOptions { Strict = false };
+        var options = new DecodeOptions { Strict = false, LegacyCompatibility = true };
 
         // Act
         var result = Toon.Decode(toon, options);
@@ -616,13 +623,7 @@ metadata:
         Assert.Equal("Alice", result[0].GetProperty("name").GetString());
     }
 
-    [Fact]
-    public void Decode_EmptyString_ThrowsInvalidOperationException()
-    {
-        // Arrange
-        var toon = "   ";
-
-        // Act & Assert
-        Assert.Throws<InvalidOperationException>(() => Toon.Decode(toon));
-    }
+    // Whitespace-only input is covered in ToonV3ComplianceTests
+    // (Decode_WhitespaceOnly_ReturnsEmptyObject) — spec §5 says an empty
+    // document decodes to {}, not a thrown exception.
 }

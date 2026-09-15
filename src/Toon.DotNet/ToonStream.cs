@@ -64,7 +64,7 @@ public static partial class Toon
     {
         if (stream is null) throw new ArgumentNullException(nameof(stream));
 
-        var content = ReadFromStream(stream, encoding ?? Encoding.UTF8);
+        var content = ReadFromStream(stream, encoding, options?.Strict ?? true);
         return Decode(content, options);
     }
 
@@ -92,7 +92,7 @@ public static partial class Toon
     {
         if (stream is null) throw new ArgumentNullException(nameof(stream));
 
-        var content = ReadFromStream(stream, encoding ?? Encoding.UTF8);
+        var content = ReadFromStream(stream, encoding, options?.Strict ?? true);
         return Decode<T>(content, options, jsonOptions);
     }
 
@@ -264,7 +264,7 @@ public static partial class Toon
     {
         if (stream is null) throw new ArgumentNullException(nameof(stream));
 
-        var content = await ReadFromStreamAsync(stream, encoding ?? Encoding.UTF8, cancellationToken).ConfigureAwait(false);
+        var content = await ReadFromStreamAsync(stream, encoding, options?.Strict ?? true, cancellationToken).ConfigureAwait(false);
         return Decode(content, options);
     }
 
@@ -298,7 +298,7 @@ public static partial class Toon
     {
         if (stream is null) throw new ArgumentNullException(nameof(stream));
 
-        var content = await ReadFromStreamAsync(stream, encoding ?? Encoding.UTF8, cancellationToken).ConfigureAwait(false);
+        var content = await ReadFromStreamAsync(stream, encoding, options?.Strict ?? true, cancellationToken).ConfigureAwait(false);
         return Decode<T>(content, options, jsonOptions);
     }
 
@@ -306,13 +306,46 @@ public static partial class Toon
     // Private stream helpers
     // -------------------------------------------------------------------------
 
-    private static string ReadFromStream(Stream stream, Encoding encoding)
+    /// <summary>
+    /// Resolves the encoding to use for a byte-level decode. Spec §4
+    /// (v4.0.0): in strict mode, ill-formed UTF-8 (invalid/truncated
+    /// sequences, or bytes encoding surrogate code points) MUST error and
+    /// MUST NOT be silently replaced with U+FFFD. The shared
+    /// <see cref="Encoding.UTF8"/> instance uses a replacement fallback,
+    /// so strict-mode decoding needs a throwing <see cref="UTF8Encoding"/>
+    /// instead — but only when the caller didn't explicitly supply an
+    /// encoding. An explicitly supplied encoding (its own fallback
+    /// included) is always respected as-is: the caller has already taken
+    /// control of byte-decoding behavior.
+    /// </summary>
+    private static Encoding ResolveStreamDecodeEncoding(Encoding? encoding, bool strict)
     {
-        using var reader = new StreamReader(stream, encoding,
+        if (encoding != null)
+        {
+            return encoding;
+        }
+
+        return strict
+            ? new UTF8Encoding(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true)
+            : Encoding.UTF8;
+    }
+
+    private static string ReadFromStream(Stream stream, Encoding? encoding, bool strict)
+    {
+        using var reader = new StreamReader(stream, ResolveStreamDecodeEncoding(encoding, strict),
             detectEncodingFromByteOrderMarks: true,
             bufferSize: StreamBufferSize,
             leaveOpen: true);
-        return reader.ReadToEnd();
+        try
+        {
+            return reader.ReadToEnd();
+        }
+        catch (DecoderFallbackException ex)
+        {
+            throw new InvalidOperationException(
+                "Ill-formed UTF-8 byte sequence in input (spec §4: strict decoders MUST reject invalid/truncated UTF-8 rather than silently substituting U+FFFD).",
+                ex);
+        }
     }
 
     private static void WriteToStream(Stream stream, string content, Encoding encoding)
@@ -327,13 +360,22 @@ public static partial class Toon
     }
 
 #if NETSTANDARD2_0
-    private static async Task<string> ReadFromStreamAsync(Stream stream, Encoding encoding, CancellationToken _)
+    private static async Task<string> ReadFromStreamAsync(Stream stream, Encoding? encoding, bool strict, CancellationToken _)
     {
-        using var reader = new StreamReader(stream, encoding,
+        using var reader = new StreamReader(stream, ResolveStreamDecodeEncoding(encoding, strict),
             detectEncodingFromByteOrderMarks: true,
             bufferSize: StreamBufferSize,
             leaveOpen: true);
-        return await reader.ReadToEndAsync().ConfigureAwait(false);
+        try
+        {
+            return await reader.ReadToEndAsync().ConfigureAwait(false);
+        }
+        catch (DecoderFallbackException ex)
+        {
+            throw new InvalidOperationException(
+                "Ill-formed UTF-8 byte sequence in input (spec §4: strict decoders MUST reject invalid/truncated UTF-8 rather than silently substituting U+FFFD).",
+                ex);
+        }
     }
 
     private static async Task WriteToStreamAsync(Stream stream, string content, Encoding encoding, CancellationToken _)
@@ -352,13 +394,22 @@ public static partial class Toon
         }
     }
 #else
-    private static async Task<string> ReadFromStreamAsync(Stream stream, Encoding encoding, CancellationToken cancellationToken)
+    private static async Task<string> ReadFromStreamAsync(Stream stream, Encoding? encoding, bool strict, CancellationToken cancellationToken)
     {
-        using var reader = new StreamReader(stream, encoding,
+        using var reader = new StreamReader(stream, ResolveStreamDecodeEncoding(encoding, strict),
             detectEncodingFromByteOrderMarks: true,
             bufferSize: StreamBufferSize,
             leaveOpen: true);
-        return await reader.ReadToEndAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            return await reader.ReadToEndAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (DecoderFallbackException ex)
+        {
+            throw new InvalidOperationException(
+                "Ill-formed UTF-8 byte sequence in input (spec §4: strict decoders MUST reject invalid/truncated UTF-8 rather than silently substituting U+FFFD).",
+                ex);
+        }
     }
 
     private static async Task WriteToStreamAsync(Stream stream, string content, Encoding encoding, CancellationToken cancellationToken)

@@ -205,27 +205,31 @@ public class FileOperationTests : IDisposable
     }
 
     [Fact]
-    public void Load_EmptyFile_ThrowsArgumentException()
+    public void Load_EmptyFile_ReturnsDefaultInstance()
     {
-        // Arrange
+        // Spec §5: an empty document decodes to {}, which deserializes to
+        // a default-valued instance rather than throwing.
         var filePath = GetTempFilePath();
         File.WriteAllText(filePath, string.Empty);
 
-        // Act & Assert
-        Assert.Throws<ArgumentException>(() => Toon.Load<TestUser>(filePath));
+        var result = Toon.Load<TestUser>(filePath);
+
+        Assert.Equal(0, result.Id);
+        Assert.Equal(string.Empty, result.Name);
+        Assert.Equal(string.Empty, result.Role);
     }
 
     [Fact]
-    public void JsonLoad_EmptyFile_ThrowsArgumentException()
+    public void JsonLoad_EmptyFile_ReturnsEmptyJsonObject()
     {
-        // Arrange
         var tempFile = CreateTempFile(string.Empty);
 
         try
         {
-            // Act & Assert
-            var exception = Assert.Throws<ArgumentException>(() => Toon.Load(tempFile));
-            Assert.Contains("Input cannot be null or empty", exception.Message);
+            var result = Toon.Load(tempFile);
+
+            Assert.Equal(JsonValueKind.Object, result.ValueKind);
+            Assert.Equal(0, result.EnumerateObject().Count());
         }
         finally
         {

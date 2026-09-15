@@ -475,9 +475,24 @@ public static class ToonExcel
             {
                 var sheet = AddSheetWithUniqueName(workbook, property.Name);
                 if (property.Value.ValueKind == JsonValueKind.Array)
+                {
                     PopulateWorksheet(sheet, property.Value);
+                }
+                else if (property.Value.ValueKind == JsonValueKind.Object && IsObjectOfObjects(property.Value))
+                {
+                    // Spec §9.5 (v4.0.0 RFC #57) keyed tabular form decodes to
+                    // exactly this shape — but TOON's decoded JsonElement can't
+                    // distinguish that from plain nested §8 object syntax with
+                    // the same shape, so this improves the general case rather
+                    // than detecting v4 syntax specifically. Without this, an
+                    // entire sheet's worth of tabular data collapsed into
+                    // unreadable raw JSON in a single cell.
+                    PopulateWorksheetFromKeyedObject(sheet, property.Value);
+                }
                 else
+                {
                     sheet.Cell(1, 1).Value = property.Value.GetRawText();
+                }
             }
         }
         else if (element.ValueKind == JsonValueKind.Array)
@@ -530,6 +545,58 @@ public static class ToonExcel
             {
                 if (rows[r].TryGetProperty(columns[col], out var val))
                     SetCellValue(sheet.Cell(r + 2, col + 1), val);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Checks whether an object's first entry is itself a non-empty
+    /// object — the shape spec §9.5 keyed tabular form decodes to (an
+    /// entry per row, fields per column). Mirrors <see cref="PopulateWorksheet"/>'s
+    /// existing leniency for arrays of objects: only the first entry's
+    /// shape is checked, not uniformity across all entries.
+    /// </summary>
+    private static bool IsObjectOfObjects(JsonElement obj)
+    {
+        foreach (var property in obj.EnumerateObject())
+        {
+            return property.Value.ValueKind == JsonValueKind.Object && property.Value.EnumerateObject().Any();
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Writes an object-of-objects <see cref="JsonElement"/> to a
+    /// worksheet as a keyed table: an entry per row, with an extra
+    /// leading "key" column holding each entry's name, followed by one
+    /// column per field (columns derived from the first entry's keys,
+    /// same leniency as <see cref="PopulateWorksheet"/> — a later entry
+    /// missing a field just leaves that cell blank).
+    /// </summary>
+    private static void PopulateWorksheetFromKeyedObject(IXLWorksheet sheet, JsonElement keyedObject)
+    {
+        var entries = keyedObject.EnumerateObject().ToList();
+        if (entries.Count == 0)
+            return;
+
+        var columns = entries[0].Value.EnumerateObject().Select(p => p.Name).ToList();
+
+        sheet.Cell(1, 1).Value = "key";
+        for (int col = 0; col < columns.Count; col++)
+            sheet.Cell(1, col + 2).Value = columns[col];
+
+        for (int r = 0; r < entries.Count; r++)
+        {
+            sheet.Cell(r + 2, 1).Value = entries[r].Name;
+
+            if (entries[r].Value.ValueKind != JsonValueKind.Object)
+                continue;
+
+            for (int col = 0; col < columns.Count; col++)
+            {
+                if (entries[r].Value.TryGetProperty(columns[col], out var val))
+                    SetCellValue(sheet.Cell(r + 2, col + 2), val);
             }
         }
     }

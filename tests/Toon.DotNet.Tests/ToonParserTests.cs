@@ -435,8 +435,8 @@ public class ToonParserTests
         Assert.Equal(2, result.Header.Length);
         Assert.NotNull(result.Header.Fields);
         Assert.Equal(2, result.Header.Fields.Length);
-        Assert.Equal("id", result.Header.Fields[0]);
-        Assert.Equal("name", result.Header.Fields[1]);
+        Assert.Equal("id", result.Header.Fields[0].Name);
+        Assert.Equal("name", result.Header.Fields[1].Name);
     }
 
     [Fact]
@@ -567,16 +567,14 @@ public class ToonParserTests
     }
 
     [Fact]
-    public void ParseArrayHeaderLine_InvalidLength_ReturnsNull()
+    public void ParseArrayHeaderLine_InvalidLength_Throws()
     {
-        // Arrange
+        // Once a line has an unambiguous "key[...]...:" shape, a malformed
+        // length is a genuine syntax error (spec §6), not "not a header
+        // after all" — see TOON_V3.md findings 6/7.
         var input = "items[abc]: value";
 
-        // Act
-        var result = ToonParser.ParseArrayHeaderLine(input, ',');
-
-        // Assert
-        Assert.Null(result);
+        Assert.Throws<InvalidOperationException>(() => ToonParser.ParseArrayHeaderLine(input, ','));
     }
 
     [Fact]
@@ -619,8 +617,8 @@ public class ToonParserTests
 
         // Assert
         Assert.NotNull(result);
-        Assert.Equal("first name", result.Header.Fields![0]);
-        Assert.Equal("last name", result.Header.Fields[1]);
+        Assert.Equal("first name", result.Header.Fields![0].Name);
+        Assert.Equal("last name", result.Header.Fields[1].Name);
     }
 
     [Fact]

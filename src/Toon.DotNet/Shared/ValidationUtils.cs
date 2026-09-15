@@ -65,4 +65,18 @@ internal static class ValidationUtils
             throw new InvalidOperationException($"Tabular array declared {declaredCount} rows but found {actualCount}");
         }
     }
+
+    /// <summary>
+    /// Validates that an object key has not already been seen at the same depth (strict mode only).
+    /// </summary>
+    /// <param name="isDuplicate">Whether the key already exists in the object being decoded.</param>
+    /// <param name="key">The key, for the error message.</param>
+    /// <exception cref="InvalidOperationException">Thrown when the key is a duplicate.</exception>
+    public static void AssertNoDuplicateKey(bool isDuplicate, string key)
+    {
+        if (isDuplicate)
+        {
+            throw new InvalidOperationException($"Duplicate object key: {key}");
+        }
+    }
 }

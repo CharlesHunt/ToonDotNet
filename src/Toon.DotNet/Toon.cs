@@ -97,13 +97,13 @@ public static partial class Toon
     /// </example>
     public static JsonElement Decode(string input, DecodeOptions? options = null)
     {
-        if (string.IsNullOrEmpty(input))
+        if (input == null)
         {
-            throw new ArgumentException("Input cannot be null or empty", nameof(input));
+            throw new ArgumentException("Input cannot be null", nameof(input));
         }
 
         var resolvedOptions = options ?? new DecodeOptions();
-        return ToonDecoder.DecodeValue(input, resolvedOptions);        
+        return ToonDecoder.DecodeValue(input, resolvedOptions);
     }
 
     /// <summary>
@@ -156,7 +156,7 @@ public static partial class Toon
     /// </example>
     public static bool IsValid(string input, DecodeOptions? options = null)
     {
-        if (string.IsNullOrEmpty(input))
+        if (input == null)
             return false;
 
         try
@@ -351,9 +351,9 @@ public static partial class Toon
     /// </example>
     public static string ToJson(string toonString, DecodeOptions? decodeOptions = null, JsonSerializerOptions? jsonOptions = null)
     {
-        if (string.IsNullOrEmpty(toonString))
+        if (toonString == null)
         {
-            throw new ArgumentException("TOON string cannot be null or empty", nameof(toonString));
+            throw new ArgumentException("TOON string cannot be null", nameof(toonString));
         }
 
         var jsonElement = Decode(toonString, decodeOptions);
@@ -417,9 +417,9 @@ public static partial class Toon
     /// </example>
     public static void SaveAsJson(string toonString, string jsonFilePath, DecodeOptions? decodeOptions = null, JsonSerializerOptions? jsonOptions = null)
     {
-        if (string.IsNullOrEmpty(toonString))
+        if (toonString == null)
         {
-            throw new ArgumentException("TOON string cannot be null or empty", nameof(toonString));
+            throw new ArgumentException("TOON string cannot be null", nameof(toonString));
         }
 
         if (string.IsNullOrEmpty(jsonFilePath))

@@ -12,13 +12,19 @@ internal static class LiteralUtils
     /// Parses a primitive token into a JsonElement.
     /// </summary>
     /// <param name="token">The token to parse.</param>
+    /// <param name="legacyCompatibility">When true, trims the token with the pre-v4 broader-whitespace rule instead of spec §12's U+0020-only rule.</param>
     /// <returns>A JsonElement representing the parsed value.</returns>
-    public static JsonElement ParsePrimitiveToken(string token)
+    public static JsonElement ParsePrimitiveToken(string token, bool legacyCompatibility = false)
     {
-        if (string.IsNullOrEmpty(token))
+        if (token == null)
             return JsonDocument.Parse("null").RootElement;
 
-        string trimmed = token.Trim();
+        // Spec §9.1: an empty token (e.g. between two delimiters) decodes to
+        // an empty string, not null.
+        if (token.Length == 0)
+            return JsonDocument.Parse("\"\"").RootElement;
+
+        string trimmed = StringUtils.TrimToken(token, legacyCompatibility);
 
         // Handle quoted strings - but validate they are properly quoted
 #if NETSTANDARD2_0
@@ -47,6 +53,11 @@ internal static class LiteralUtils
                 return JsonDocument.Parse("true").RootElement;
             case Constants.FalseLiteral:
                 return JsonDocument.Parse("false").RootElement;
+            // Spec §4/§9.1: "[]" (root or object-field value position) decodes
+            // as an empty array. Unquoted strings can never legally contain
+            // "[" or "]" (§7.2 requires quoting), so this is unambiguous.
+            case "[]":
+                return JsonDocument.Parse("[]").RootElement;
         }
 
         // Try to parse as number
@@ -67,6 +78,15 @@ internal static class LiteralUtils
     /// <returns>True if parsing succeeded, false otherwise.</returns>
     private static bool TryParseNumber(string value, out JsonElement element)
     {
+        // Spec §4: "05", "0001", "-05" are strings, not numbers (a leading
+        // zero followed by another digit). "0.5", "0e1", "-0.5" (zero
+        // followed by '.' or 'e'/'E') and a lone "0" remain valid numbers.
+        if (HasForbiddenLeadingZero(value))
+        {
+            element = default;
+            return false;
+        }
+
         // Try integer first
         if (int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out int intValue))
         {
@@ -93,12 +113,28 @@ internal static class LiteralUtils
     }
 
     /// <summary>
+    /// Checks whether a token has a leading zero followed by another digit
+    /// (e.g. "05", "-0001"), which spec §4 excludes from the number grammar.
+    /// </summary>
+    private static bool HasForbiddenLeadingZero(string value)
+    {
+        int start = value.Length > 0 && value[0] == '-' ? 1 : 0;
+
+        if (value.Length <= start + 1 || value[start] != '0')
+            return false;
+
+        char next = value[start + 1];
+        return next >= '0' && next <= '9';
+    }
+
+    /// <summary>
     /// Formats a primitive JsonElement as a TOON string.
     /// </summary>
     /// <param name="element">The JsonElement to format.</param>
     /// <param name="delimiter">The delimiter character (used for escaping if needed).</param>
+    /// <param name="specVersion">Which TOON grammar's quoting rules to apply — see <see cref="StringUtils.EscapeString"/>.</param>
     /// <returns>The formatted string representation.</returns>
-    public static string FormatPrimitive(JsonElement element, char delimiter)
+    public static string FormatPrimitive(JsonElement element, char delimiter, ToonSpecVersion specVersion = ToonSpecVersion.V4)
     {
         return element.ValueKind switch
         {
@@ -106,7 +142,7 @@ internal static class LiteralUtils
             JsonValueKind.True => Constants.TrueLiteral,
             JsonValueKind.False => Constants.FalseLiteral,
             JsonValueKind.Number => FormatNumber(element),
-            JsonValueKind.String => StringUtils.EscapeString(element.GetString() ?? ""),
+            JsonValueKind.String => StringUtils.EscapeString(element.GetString() ?? "", delimiter, specVersion),
             _ => throw new ArgumentException($"Cannot format {element.ValueKind} as primitive")
         };
     }
@@ -120,7 +156,7 @@ internal static class LiteralUtils
         {
             return intValue.ToString(CultureInfo.InvariantCulture);
         }
-        
+
         if (element.TryGetInt64(out long longValue))
         {
             return longValue.ToString(CultureInfo.InvariantCulture);
@@ -128,10 +164,103 @@ internal static class LiteralUtils
 
         if (element.TryGetDouble(out double doubleValue))
         {
-            return doubleValue.ToString("G17", CultureInfo.InvariantCulture);
+            return FormatCanonicalDouble(doubleValue);
         }
 
         return element.GetRawText();
+    }
+
+    private static readonly char[] ExponentMarkers = { 'e', 'E' };
+
+    /// <summary>
+    /// Formats a double per spec §2's canonical number form: no more
+    /// precision than round-trip requires, -0 normalized to 0, and no
+    /// exponent for 0 or 1e-6 &lt;= |n| &lt; 1e21.
+    /// </summary>
+    private static string FormatCanonicalDouble(double value)
+    {
+        if (value == 0)
+            return "0"; // covers -0 -> 0 too (-0.0 == 0.0 in IEEE 754)
+
+#if NETSTANDARD2_0
+        // .NET Standard 2.0 targets include .NET Framework 4.6.1+, whose
+        // default double.ToString() predates the shortest-round-trip
+        // ("Ryu") algorithm and isn't guaranteed to round-trip — G17 is
+        // the safe, if verbose, choice there.
+        string formatted = value.ToString("G17", CultureInfo.InvariantCulture);
+#else
+        // Modern .NET's default ToString() already produces the shortest
+        // string that round-trips to the exact same double.
+        string formatted = value.ToString(CultureInfo.InvariantCulture);
+#endif
+
+        int eIndex = formatted.IndexOfAny(ExponentMarkers);
+        if (eIndex < 0)
+            return formatted;
+
+        double magnitude = Math.Abs(value);
+        bool exponentForbidden = magnitude >= 1e-6 && magnitude < 1e21;
+
+        if (exponentForbidden)
+            return ExpandExponentialNotation(formatted, eIndex);
+
+        // Spec's own examples ("1e-7", "1e+21") use a lowercase marker.
+        return formatted.Substring(0, eIndex) + "e" + formatted.Substring(eIndex + 1);
+    }
+
+    /// <summary>
+    /// Converts a .NET exponential number string (e.g. "1.23E+19") to
+    /// fixed-point notation, preserving the exact same significant digits
+    /// and trimming trailing fractional zeros per spec §2.
+    /// </summary>
+    private static string ExpandExponentialNotation(string formatted, int eIndex)
+    {
+        string mantissaPart = formatted.Substring(0, eIndex);
+        string exponentPart = formatted.Substring(eIndex + 1);
+        int exponent = int.Parse(exponentPart, NumberStyles.Integer, CultureInfo.InvariantCulture);
+
+        bool negative = mantissaPart.Length > 0 && mantissaPart[0] == '-';
+        if (negative)
+            mantissaPart = mantissaPart.Substring(1);
+
+        int dotIndex = mantissaPart.IndexOf('.');
+        string digits;
+        int pointPosition; // count of significant digits before the decimal point
+        if (dotIndex >= 0)
+        {
+            digits = mantissaPart.Substring(0, dotIndex) + mantissaPart.Substring(dotIndex + 1);
+            pointPosition = dotIndex;
+        }
+        else
+        {
+            digits = mantissaPart;
+            pointPosition = mantissaPart.Length;
+        }
+
+        int newPointPosition = pointPosition + exponent;
+
+        string result;
+        if (newPointPosition <= 0)
+        {
+            result = "0." + new string('0', -newPointPosition) + digits;
+        }
+        else if (newPointPosition >= digits.Length)
+        {
+            result = digits + new string('0', newPointPosition - digits.Length);
+        }
+        else
+        {
+            result = digits.Substring(0, newPointPosition) + "." + digits.Substring(newPointPosition);
+        }
+
+        if (result.IndexOf('.') >= 0)
+        {
+            result = result.TrimEnd('0');
+            if (result.Length > 0 && result[result.Length - 1] == '.')
+                result = result.Substring(0, result.Length - 1);
+        }
+
+        return negative ? "-" + result : result;
     }
 
     /// <summary>
@@ -139,10 +268,11 @@ internal static class LiteralUtils
     /// </summary>
     /// <param name="elements">The primitive elements to format and join.</param>
     /// <param name="delimiter">The delimiter to use.</param>
+    /// <param name="specVersion">Which TOON grammar's quoting rules to apply — see <see cref="StringUtils.EscapeString"/>.</param>
     /// <returns>The joined string.</returns>
-    public static string FormatAndJoinPrimitives(JsonElement[] elements, char delimiter)
+    public static string FormatAndJoinPrimitives(JsonElement[] elements, char delimiter, ToonSpecVersion specVersion = ToonSpecVersion.V4)
     {
-        var formattedValues = elements.Select(e => FormatPrimitive(e, delimiter));
+        var formattedValues = elements.Select(e => FormatPrimitive(e, delimiter, specVersion));
         return string.Join(delimiter.ToString(), formattedValues);
     }
 }

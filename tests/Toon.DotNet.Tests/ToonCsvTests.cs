@@ -11,11 +11,19 @@ namespace ToonFormat.Csv.Tests;
 public class ToonCsvTests : IDisposable
 {
     private readonly List<string> _tempFiles = [];
+    private readonly List<string> _tempDirectories = [];
 
     private string GetTempPath(string extension = ".csv")
     {
         var path = Path.Combine(Path.GetTempPath(), $"toon_csv_{Guid.NewGuid()}{extension}");
         _tempFiles.Add(path);
+        return path;
+    }
+
+    private string GetTempDirectory()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"toon_csv_dir_{Guid.NewGuid()}");
+        _tempDirectories.Add(path);
         return path;
     }
 
@@ -25,6 +33,12 @@ public class ToonCsvTests : IDisposable
         {
             if (File.Exists(file))
                 try { File.Delete(file); } catch { }
+        }
+
+        foreach (var dir in _tempDirectories)
+        {
+            if (Directory.Exists(dir))
+                try { Directory.Delete(dir, recursive: true); } catch { }
         }
     }
 
@@ -101,6 +115,49 @@ public class ToonCsvTests : IDisposable
 
         Assert.Equal(JsonValueKind.Number, row.GetProperty("price").ValueKind);
         Assert.Equal(9.99, row.GetProperty("price").GetDouble());
+    }
+
+    // Spec §4 (TOON_V3.md finding, CSV-package-specific): a leading zero
+    // followed by another digit means the value is a string in TOON's
+    // number grammar, not a number. CoerceValue previously coerced such
+    // cells to long/double before the value ever reached the encoder,
+    // silently dropping the leading zero (e.g. a zip code becoming a
+    // smaller integer).
+    [Fact]
+    public void FromCsv_LeadingZeroNumericCell_PreservedAsString()
+    {
+        const string csv = "id,zip\n1,05678";
+
+        var toon = ToonCsv.FromCsv(csv);
+        var row = Toon.Decode(toon)[0];
+
+        Assert.Equal(JsonValueKind.String, row.GetProperty("zip").ValueKind);
+        Assert.Equal("05678", row.GetProperty("zip").GetString());
+    }
+
+    [Fact]
+    public void FromCsv_LeadingZeroDecimalCell_StillParsedAsNumber()
+    {
+        // "0.5" is explicitly NOT a forbidden leading zero (spec §4) —
+        // guards against the fix above over-correcting.
+        const string csv = "id,fraction\n1,0.5";
+
+        var toon = ToonCsv.FromCsv(csv);
+        var row = Toon.Decode(toon)[0];
+
+        Assert.Equal(JsonValueKind.Number, row.GetProperty("fraction").ValueKind);
+        Assert.Equal(0.5, row.GetProperty("fraction").GetDouble());
+    }
+
+    [Fact]
+    public void RoundTrip_CsvWithLeadingZeroCell_PreservesLeadingZero()
+    {
+        const string csv = "id,zip\n1,05678";
+
+        var toon = ToonCsv.FromCsv(csv);
+        var roundTrippedCsv = ToonCsv.ToCsv(toon);
+
+        Assert.Contains("05678", roundTrippedCsv);
     }
 
     [Fact]
@@ -462,9 +519,29 @@ public class ToonCsvTests : IDisposable
         const string toon = "[1]{id,score}:\n  42,9.99";
 
         var csv = ToonCsv.ToCsv(toon);
+        // Exact-match the data row, not a loose Contains — "9.99" is a
+        // substring of the verbose "9.9900000000000002" bug this used to
+        // silently pass under.
+        var dataLine = csv.Split('\n')[1].Trim('\r');
 
-        Assert.Contains("42",   csv);
-        Assert.Contains("9.99", csv);
+        Assert.Equal("42,9.99", dataLine);
+    }
+
+    // ElementToString used element.GetRawText() for decoded numbers, which
+    // reflects the decoder's internal G17-based storage rather than a
+    // clean re-formatted value — decoding the clean TOON text "9.99" and
+    // exporting to CSV produced "9.9900000000000002". Confirmed
+    // empirically before this fix landed.
+    [Fact]
+    public void ToCsv_DecodedDecimalNumber_FormattedCleanlyNotVerbosely()
+    {
+        const string toon = "[1]{id,amount}:\n  1,9.99";
+
+        var csv = ToonCsv.ToCsv(toon);
+
+        Assert.DoesNotContain("9.9900000000000002", csv);
+        var dataLine = csv.Split('\n')[1].Trim('\r');
+        Assert.Equal("1,9.99", dataLine);
     }
 
     [Fact]
@@ -786,5 +863,319 @@ public class ToonCsvTests : IDisposable
         var toon = csv.CsvToToon(opts);
 
         Assert.Contains("|", toon);
+    }
+
+    // =========================================================================
+    // Multi-dataset: TOON -> multiple CSVs. CSV has no native multi-table
+    // concept, so — mirroring Toon.DotNet.Excel's "one worksheet per
+    // top-level key" — the equivalent here is "one CSV per top-level key."
+    // ToCsvDictionary/ToCsvFiles require the TOON root to be an OBJECT
+    // (one array per key); a root ARRAY (a single, unnamed dataset) is out
+    // of scope for these and should use the existing ToCsv/FromCsv methods
+    // instead — this keeps API responsibilities crisply separated rather
+    // than inventing a default key name for the single-dataset case.
+    // =========================================================================
+
+    [Fact]
+    public void ToCsvDictionary_MultiDatasetToon_ReturnsOneEntryPerKey()
+    {
+        const string toon = "Sales[1]{id,amount}:\n  1,9.99\nCustomers[1]{id,name}:\n  1,Alice";
+
+        var result = ToonCsv.ToCsvDictionary(toon);
+
+        Assert.Equal(2, result.Count);
+        Assert.Contains("id,amount", result["Sales"]);
+        Assert.Contains("1,9.99", result["Sales"]);
+        Assert.Contains("id,name", result["Customers"]);
+        Assert.Contains("1,Alice", result["Customers"]);
+    }
+
+    [Fact]
+    public void ToCsvDictionary_RootArray_Throws()
+    {
+        const string toon = "[2]{id,name}:\n  1,Alice\n  2,Bob";
+
+        var ex = Assert.Throws<InvalidOperationException>(() => ToonCsv.ToCsvDictionary(toon));
+        Assert.Contains("ToCsv", ex.Message);
+    }
+
+    [Fact]
+    public void ToCsvDictionary_NonArrayTopLevelValue_ThrowsNamingKey()
+    {
+        const string toon = "Sales[1]{id,amount}:\n  1,9.99\nConfig:\n  theme: dark";
+
+        var ex = Assert.Throws<InvalidOperationException>(() => ToonCsv.ToCsvDictionary(toon));
+        Assert.Contains("Config", ex.Message);
+    }
+
+    [Fact]
+    public void ToCsvDictionary_NullToon_ThrowsArgumentNullException()
+    {
+        Assert.Throws<ArgumentNullException>(() => ToonCsv.ToCsvDictionary(null!));
+    }
+
+    [Fact]
+    public void ToCsvDictionary_EmptyStringToon_ThrowsArgumentException()
+    {
+        // Matches ToCsv's own convention: this CSV-package boundary
+        // rejects empty input even though core Toon.Decode("") itself
+        // is spec-valid (§5: an empty document decodes to {}).
+        Assert.Throws<ArgumentException>(() => ToonCsv.ToCsvDictionary(""));
+    }
+
+    [Fact]
+    public void ToCsvDictionary_ToonThatDecodesToEmptyObject_ReturnsEmptyDictionary()
+    {
+        // Non-empty input string (a comment-only document) that decodes
+        // to a genuinely empty object — distinct from the rejected empty
+        // string case above.
+        var result = ToonCsv.ToCsvDictionary("# just a comment");
+
+        Assert.Empty(result);
+    }
+
+    // =========================================================================
+    // Multi-dataset: TOON -> CSV files
+    // =========================================================================
+
+    [Fact]
+    public void ToCsvFiles_MultiDatasetToon_WritesOneFilePerKey()
+    {
+        const string toon = "Sales[1]{id,amount}:\n  1,9.99\nCustomers[1]{id,name}:\n  1,Alice";
+        var dir = GetTempDirectory();
+
+        var written = ToonCsv.ToCsvFiles(toon, dir);
+
+        Assert.Equal(2, written.Count);
+        Assert.True(File.Exists(written["Sales"]));
+        Assert.True(File.Exists(written["Customers"]));
+        Assert.Contains("1,9.99", File.ReadAllText(written["Sales"]));
+        Assert.Contains("1,Alice", File.ReadAllText(written["Customers"]));
+        Assert.Equal("Sales.csv", Path.GetFileName(written["Sales"]));
+        Assert.Equal("Customers.csv", Path.GetFileName(written["Customers"]));
+    }
+
+    [Fact]
+    public void ToCsvFiles_CreatesOutputDirectoryIfMissing()
+    {
+        const string toon = "Sales[1]{id,amount}:\n  1,9.99";
+        var dir = Path.Combine(GetTempDirectory(), "nested", "subdir");
+
+        Assert.False(Directory.Exists(dir));
+
+        ToonCsv.ToCsvFiles(toon, dir);
+
+        Assert.True(Directory.Exists(dir));
+    }
+
+    [Fact]
+    public void ToCsvFiles_KeyWithInvalidFileNameChars_IsSanitized()
+    {
+        const string toon = "\"Sales/Data\"[1]{id}:\n  1";
+        var dir = GetTempDirectory();
+
+        var written = ToonCsv.ToCsvFiles(toon, dir);
+
+        var path = Assert.Single(written).Value;
+        Assert.DoesNotContain('/', Path.GetFileName(path));
+        Assert.True(File.Exists(path));
+    }
+
+    [Fact]
+    public void ToCsvFiles_KeysCollidingAfterSanitization_DedupsWithSuffix()
+    {
+        // Both keys sanitize to the same base file name ("SalesData").
+        const string toon = "\"Sales/Data\"[1]{id}:\n  1\n\"Sales?Data\"[1]{id}:\n  2";
+        var dir = GetTempDirectory();
+
+        var written = ToonCsv.ToCsvFiles(toon, dir);
+
+        Assert.Equal(2, written.Count);
+        var fileNames = written.Values.Select(Path.GetFileName).ToHashSet();
+        Assert.Equal(2, fileNames.Count);
+        Assert.True(File.Exists(written["Sales/Data"]));
+        Assert.True(File.Exists(written["Sales?Data"]));
+    }
+
+    [Fact]
+    public void ToCsvFiles_NullOutputDirectory_ThrowsArgumentNullException()
+    {
+        const string toon = "Sales[1]{id}:\n  1";
+
+        Assert.Throws<ArgumentNullException>(() => ToonCsv.ToCsvFiles(toon, null!));
+    }
+
+    [Fact]
+    public void ToCsvFiles_EmptyOutputDirectory_ThrowsArgumentException()
+    {
+        const string toon = "Sales[1]{id}:\n  1";
+
+        Assert.Throws<ArgumentException>(() => ToonCsv.ToCsvFiles(toon, ""));
+    }
+
+    [Fact]
+    public async Task ToCsvFilesAsync_MultiDatasetToon_WritesOneFilePerKey()
+    {
+        const string toon = "Sales[1]{id,amount}:\n  1,9.99\nCustomers[1]{id,name}:\n  1,Alice";
+        var dir = GetTempDirectory();
+
+        var written = await ToonCsv.ToCsvFilesAsync(toon, dir);
+
+        Assert.Equal(2, written.Count);
+        Assert.Contains("1,9.99", await File.ReadAllTextAsync(written["Sales"]));
+        Assert.Contains("1,Alice", await File.ReadAllTextAsync(written["Customers"]));
+    }
+
+    // =========================================================================
+    // Multi-dataset: multiple CSVs -> TOON (the reverse direction)
+    // =========================================================================
+
+    [Fact]
+    public void FromCsvDictionary_MultipleEntries_ProducesMultiDatasetToon()
+    {
+        var csvByName = new Dictionary<string, string>
+        {
+            ["Sales"] = "id,amount\n1,9.99",
+            ["Customers"] = "id,name\n1,Alice",
+        };
+
+        var toon = ToonCsv.FromCsvDictionary(csvByName);
+        var result = Toon.Decode(toon);
+
+        Assert.Equal(9.99, result.GetProperty("Sales")[0].GetProperty("amount").GetDouble());
+        Assert.Equal("Alice", result.GetProperty("Customers")[0].GetProperty("name").GetString());
+    }
+
+    [Fact]
+    public void FromCsvDictionary_SingleEntry_StillProducesRootObject_NotUnwrapped()
+    {
+        var csvByName = new Dictionary<string, string> { ["data"] = "id,name\n1,Alice" };
+
+        var toon = ToonCsv.FromCsvDictionary(csvByName);
+        var result = Toon.Decode(toon);
+
+        Assert.Equal(JsonValueKind.Object, result.ValueKind);
+        Assert.Equal("Alice", result.GetProperty("data")[0].GetProperty("name").GetString());
+    }
+
+    [Fact]
+    public void FromCsvDictionary_NullDictionary_ThrowsArgumentNullException()
+    {
+        Assert.Throws<ArgumentNullException>(() => ToonCsv.FromCsvDictionary(null!));
+    }
+
+    [Fact]
+    public void FromCsvDictionary_EmptyDictionary_ProducesEmptyObject()
+    {
+        var toon = ToonCsv.FromCsvDictionary(new Dictionary<string, string>());
+        var result = Toon.Decode(toon);
+
+        Assert.Equal(JsonValueKind.Object, result.ValueKind);
+        Assert.Empty(result.EnumerateObject().ToArray());
+    }
+
+    [Fact]
+    public void FromCsvFiles_DirectoryOfCsvFiles_ProducesMultiDatasetToon()
+    {
+        var dir = GetTempDirectory();
+        Directory.CreateDirectory(dir);
+        File.WriteAllText(Path.Combine(dir, "Sales.csv"), "id,amount\n1,9.99");
+        File.WriteAllText(Path.Combine(dir, "Customers.csv"), "id,name\n1,Alice");
+
+        var toon = ToonCsv.FromCsvFiles(dir);
+        var result = Toon.Decode(toon);
+
+        Assert.Equal(9.99, result.GetProperty("Sales")[0].GetProperty("amount").GetDouble());
+        Assert.Equal("Alice", result.GetProperty("Customers")[0].GetProperty("name").GetString());
+    }
+
+    [Fact]
+    public void FromCsvFiles_NonexistentDirectory_ThrowsDirectoryNotFoundException()
+    {
+        var dir = GetTempDirectory();
+
+        Assert.Throws<DirectoryNotFoundException>(() => ToonCsv.FromCsvFiles(dir));
+    }
+
+    [Fact]
+    public void FromCsvFiles_EmptyDirectoryOrNoMatches_ReturnsEmptyObjectToon()
+    {
+        var dir = GetTempDirectory();
+        Directory.CreateDirectory(dir);
+
+        var toon = ToonCsv.FromCsvFiles(dir);
+        var result = Toon.Decode(toon);
+
+        Assert.Equal(JsonValueKind.Object, result.ValueKind);
+        Assert.Empty(result.EnumerateObject().ToArray());
+    }
+
+    [Fact]
+    public void FromCsvFiles_NullDirectory_ThrowsArgumentNullException()
+    {
+        Assert.Throws<ArgumentNullException>(() => ToonCsv.FromCsvFiles(null!));
+    }
+
+    [Fact]
+    public void FromCsvFiles_EmptyDirectory_ThrowsArgumentException()
+    {
+        Assert.Throws<ArgumentException>(() => ToonCsv.FromCsvFiles(""));
+    }
+
+    [Fact]
+    public void FromCsvFiles_CustomSearchPattern_OnlyMatchesPattern()
+    {
+        var dir = GetTempDirectory();
+        Directory.CreateDirectory(dir);
+        File.WriteAllText(Path.Combine(dir, "Sales.csv"), "id,amount\n1,9.99");
+        File.WriteAllText(Path.Combine(dir, "notes.txt"), "not csv");
+
+        var toon = ToonCsv.FromCsvFiles(dir);
+        var result = Toon.Decode(toon);
+
+        Assert.Single(result.EnumerateObject().ToArray());
+        Assert.True(result.TryGetProperty("Sales", out _));
+    }
+
+    [Fact]
+    public async Task FromCsvFilesAsync_DirectoryOfCsvFiles_ProducesMultiDatasetToon()
+    {
+        var dir = GetTempDirectory();
+        Directory.CreateDirectory(dir);
+        File.WriteAllText(Path.Combine(dir, "Sales.csv"), "id,amount\n1,9.99");
+
+        var toon = await ToonCsv.FromCsvFilesAsync(dir);
+        var result = Toon.Decode(toon);
+
+        Assert.Equal(9.99, result.GetProperty("Sales")[0].GetProperty("amount").GetDouble());
+    }
+
+    [Fact]
+    public void SaveCsvFilesAsToon_WritesToonFile()
+    {
+        var dir = GetTempDirectory();
+        Directory.CreateDirectory(dir);
+        File.WriteAllText(Path.Combine(dir, "Sales.csv"), "id,amount\n1,9.99");
+        var toonPath = GetTempPath(".toon");
+
+        ToonCsv.SaveCsvFilesAsToon(dir, toonPath);
+
+        Assert.True(File.Exists(toonPath));
+        var result = Toon.Decode(File.ReadAllText(toonPath));
+        Assert.Equal(9.99, result.GetProperty("Sales")[0].GetProperty("amount").GetDouble());
+    }
+
+    [Fact]
+    public void RoundTrip_ToCsvFilesThenFromCsvFiles_PreservesDatasetContent()
+    {
+        const string toon = "Sales[1]{id,amount}:\n  1,9.99\nCustomers[1]{id,name}:\n  1,Alice";
+        var dir = GetTempDirectory();
+
+        ToonCsv.ToCsvFiles(toon, dir);
+        var roundTripped = ToonCsv.FromCsvFiles(dir);
+        var result = Toon.Decode(roundTripped);
+
+        Assert.Equal(9.99, result.GetProperty("Sales")[0].GetProperty("amount").GetDouble());
+        Assert.Equal("Alice", result.GetProperty("Customers")[0].GetProperty("name").GetString());
     }
 }
