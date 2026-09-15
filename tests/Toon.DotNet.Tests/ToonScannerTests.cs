@@ -679,6 +679,40 @@ metadata:
         Assert.Same(blankLines, result);
     }
 
+    // Finding 21 (TOON_V3.md fix-order item 13): CRLF line endings should
+    // be deliberately normalized at the scanner boundary (spec §1.2), not
+    // just incidentally tolerated by scattered downstream .Trim() calls.
+    [Fact]
+    public void ToParsedLines_CrlfLineEndings_StripsTrailingCarriageReturn()
+    {
+        var input = "name: Alice\r\nage: 30\r\nnested:\r\n  inner: value\r\n";
+
+        var result = ToonScanner.ToParsedLines(input, 2, true);
+
+        Assert.NotEmpty(result.Lines);
+        Assert.All(result.Lines, line =>
+        {
+            Assert.False(line.Content.Contains('\r'), $"Content \"{line.Content}\" should not contain a trailing \\r");
+            Assert.False(line.Raw.Contains('\r'), $"Raw \"{line.Raw}\" should not contain a trailing \\r");
+        });
+    }
+
+    [Fact]
+    public void ToParsedLines_CrlfBlankLine_DetectedAsBlank()
+    {
+        // A CRLF-only blank line is just "\r" after splitting on \n —
+        // still correctly whitespace-only, but confirms the blank-line
+        // path isn't affected by the trailing \r either. No trailing
+        // newline on the input, to avoid an unrelated extra blank "line"
+        // from the empty final split segment.
+        var input = "name: Alice\r\n\r\nage: 30";
+
+        var result = ToonScanner.ToParsedLines(input, 2, true);
+
+        Assert.Equal(2, result.Lines.Length);
+        Assert.Single(result.BlankLines);
+    }
+
     // Helper method to create ParsedLine instances
     private static ParsedLine CreateParsedLine(string content, int depth, int indent, int indentSize, int lineNumber)
     {

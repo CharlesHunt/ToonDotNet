@@ -72,12 +72,18 @@ public class ToonToJsonTests
     }
 
     [Fact]
-    public void ToJson_NullOrEmptyString_ThrowsArgumentException()
+    public void ToJson_NullString_ThrowsArgumentException()
     {
-        // Act & Assert
         Assert.Throws<ArgumentException>(() => Toon.ToJson(null!));
-        Assert.Throws<ArgumentException>(() => Toon.ToJson(string.Empty));
-        Assert.Throws<InvalidOperationException>(() => Toon.ToJson("   "));
+    }
+
+    [Fact]
+    public void ToJson_EmptyOrWhitespaceString_ReturnsEmptyJsonObject()
+    {
+        // Spec §5: an empty document decodes to {}, so ToJson should
+        // produce the JSON equivalent rather than throw.
+        Assert.Equal("{}", Toon.ToJson(string.Empty));
+        Assert.Equal("{}", Toon.ToJson("   "));
     }
 
     [Fact]

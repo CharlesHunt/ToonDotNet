@@ -14,8 +14,10 @@ internal static class ToonParser
     /// </summary>
     /// <param name="content">The line content to parse.</param>
     /// <param name="defaultDelimiter">The default delimiter to use.</param>
+    /// <param name="strict">When true (default), a malformed bracket segment throws. When false, spec §14.2 permits falling through to key-value parsing instead (returns null).</param>
+    /// <param name="legacyCompatibility">When true, extracted tokens (key, value, field names) are trimmed with the pre-v4 broader-whitespace rule instead of spec §12's U+0020-only rule.</param>
     /// <returns>Parsed header information and inline values, or null if not a valid header.</returns>
-    public static ArrayHeaderParseResult? ParseArrayHeaderLine(string content, char defaultDelimiter)
+    public static ArrayHeaderParseResult? ParseArrayHeaderLine(string content, char defaultDelimiter, bool strict = true, bool legacyCompatibility = false)
     {
         string trimmed = content.TrimStart();
 
@@ -64,11 +66,15 @@ internal static class ToonParser
         int colonIndex = bracketEnd + 1;
         int braceEnd = colonIndex;
 
-        // Check for fields segment (braces come after bracket)
+        // Check for fields segment (braces come after bracket). Uses a
+        // brace-depth-aware search rather than a plain IndexOf so that
+        // nested field groups (v4.0.0 RFC #46, e.g.
+        // "{id,customer{name,country},total}") don't cause the outer
+        // field list's close brace to be mistaken for an inner group's.
         int braceStart = content.IndexOf(Constants.OpenBrace, bracketEnd);
         if (braceStart != -1 && braceStart < content.IndexOf(Constants.Colon, bracketEnd))
         {
-            int foundBraceEnd = content.IndexOf(Constants.CloseBrace, braceStart);
+            int foundBraceEnd = FindMatchingCloseBrace(content, braceStart);
             if (foundBraceEnd != -1)
             {
                 braceEnd = foundBraceEnd + 1;
@@ -85,38 +91,51 @@ internal static class ToonParser
         if (bracketStart > 0)
         {
 #if NETSTANDARD2_0
-            string rawKey = content.Substring(0, bracketStart).Trim();
-            key = rawKey.StartsWith(Constants.DoubleQuote.ToString()) ? ParseStringLiteral(rawKey) : rawKey;
+            string rawKey = StringUtils.TrimToken(content.Substring(0, bracketStart), legacyCompatibility);
+            key = rawKey.StartsWith(Constants.DoubleQuote.ToString()) ? ParseStringLiteral(rawKey, legacyCompatibility) : rawKey;
 #else
-            string rawKey = content[..bracketStart].Trim();
-            key = rawKey.StartsWith(Constants.DoubleQuote) ? ParseStringLiteral(rawKey) : rawKey;
+            string rawKey = StringUtils.TrimToken(content[..bracketStart], legacyCompatibility);
+            key = rawKey.StartsWith(Constants.DoubleQuote) ? ParseStringLiteral(rawKey, legacyCompatibility) : rawKey;
 #endif
         }
 
 #if NETSTANDARD2_0
-    string afterColon = content.Substring(colonIndex + 1).Trim();
+    string afterColon = StringUtils.TrimToken(content.Substring(colonIndex + 1), legacyCompatibility);
     string bracketContent = content.Substring(bracketStart + 1, bracketEnd - (bracketStart + 1));
 #else
-    string afterColon = content[(colonIndex + 1)..].Trim();
+    string afterColon = StringUtils.TrimToken(content[(colonIndex + 1)..], legacyCompatibility);
     string bracketContent = content[(bracketStart + 1)..bracketEnd];
 #endif
 
-        // Try to parse bracket segment
+        // Parse the bracket segment. By this point the line has an
+        // unambiguous "...[...]...:" shape, so a malformed length (spec §6:
+        // leading zeros, negative, non-numeric) is a genuine syntax error
+        // in strict mode — propagate rather than silently falling through
+        // to key-value parsing. Non-strict mode MAY fall through instead
+        // (spec §14.2); it's a choice, not a requirement, so strict mode
+        // keeps the stricter (and previously the only) behavior.
         BracketParseResult parsedBracket;
-        try
+        if (strict)
         {
-            parsedBracket = ParseBracketSegment(bracketContent, defaultDelimiter);
+            parsedBracket = ParseBracketSegment(bracketContent, defaultDelimiter, legacyCompatibility);
         }
-        catch
+        else
         {
-            return null;
+            try
+            {
+                parsedBracket = ParseBracketSegment(bracketContent, defaultDelimiter, legacyCompatibility);
+            }
+            catch (InvalidOperationException)
+            {
+                return null;
+            }
         }
 
         // Check for fields segment
-        string[]? fields = null;
+        TabularField[]? fields = null;
         if (braceStart != -1 && braceStart < colonIndex)
         {
-            int foundBraceEnd = content.IndexOf(Constants.CloseBrace, braceStart);
+            int foundBraceEnd = FindMatchingCloseBrace(content, braceStart);
             if (foundBraceEnd != -1 && foundBraceEnd < colonIndex)
             {
 #if NETSTANDARD2_0
@@ -124,10 +143,25 @@ internal static class ToonParser
 #else
                 string fieldsContent = content[(braceStart + 1)..foundBraceEnd];
 #endif
-                // Fields are always comma-delimited, regardless of the data delimiter
-                var fieldValues = ParseDelimitedValues(fieldsContent, Constants.Comma);
-                fields = fieldValues.Select(field => ParseStringLiteral(field.Trim())).ToArray();
+                // Fields are always comma-delimited, regardless of the
+                // data delimiter, and may contain nested field groups
+                // (v4.0.0 RFC #46).
+                fields = ParseFieldList(fieldsContent, legacyCompatibility);
             }
+        }
+
+        // Spec §9.5: a keyed-tabular header's field list is REQUIRED. A
+        // keyed-seg bracket with no fields segment is a malformed header
+        // — same strict/non-strict fall-through convention as the
+        // length-less bracket segment case above.
+        if (parsedBracket.IsKeyedTabular && fields == null)
+        {
+            if (strict)
+            {
+                throw new InvalidOperationException($"Keyed tabular header requires a field list: {content}");
+            }
+
+            return null;
         }
 
         var header = new ArrayHeaderInfo
@@ -136,13 +170,14 @@ internal static class ToonParser
             Length = parsedBracket.Length,
             Delimiter = parsedBracket.Delimiter,
             Fields = fields,
-            HasLengthMarker = parsedBracket.HasLengthMarker
+            HasLengthMarker = parsedBracket.HasLengthMarker,
+            IsKeyedTabular = parsedBracket.IsKeyedTabular
         };
 
         JsonElement[]? inlineValues = null;
         if (!string.IsNullOrWhiteSpace(afterColon))
         {
-            var valueStrings = ParseDelimitedValues(afterColon, parsedBracket.Delimiter);
+            var valueStrings = ParseDelimitedValues(afterColon, parsedBracket.Delimiter, legacyCompatibility);
             inlineValues = MapRowValuesToPrimitives(valueStrings);
         }
 
@@ -162,17 +197,19 @@ internal static class ToonParser
     public int Length { get; set; }
     public char Delimiter { get; set; }
     public bool HasLengthMarker { get; set; }
+    public bool IsKeyedTabular { get; set; }
 #else
     public required int Length { get; set; }
     public required char Delimiter { get; set; }
     public required bool HasLengthMarker { get; set; }
+    public required bool IsKeyedTabular { get; set; }
 #endif
     }
 
     /// <summary>
     /// Parses a bracket segment to extract length, delimiter, and length marker information.
     /// </summary>
-    private static BracketParseResult ParseBracketSegment(string seg, char defaultDelimiter)
+    private static BracketParseResult ParseBracketSegment(string seg, char defaultDelimiter, bool legacyCompatibility)
     {
         bool hasLengthMarker = false;
         string content = seg;
@@ -222,7 +259,46 @@ internal static class ToonParser
 #endif
         }
 
-        if (!int.TryParse(content, out int length))
+        // Spec §12: decoders trim exactly U+0020 around tokens (broader
+        // whitespace under LegacyCompatibility). Trimmed here, after the
+        // delimiter-suffix check above, so a real tab/pipe delimiter
+        // marker (checked via EndsWith) is never mistaken for trimmable
+        // padding.
+        content = StringUtils.TrimToken(content, legacyCompatibility);
+
+        // Spec §6 keyed-seg grammar (v4.0.0 RFC #57, §9.5 keyed tabular
+        // form for objects): "[" length ":" [ delimsym ] "]" — a literal
+        // trailing colon inside the bracket segment (checked after the
+        // delimiter suffix above, so "2:|" strips the pipe first, then
+        // the colon) marks the keyed form rather than a plain array
+        // header. A colon can never appear here otherwise, since a plain
+        // array header's bracket content is digits (+ optional marker/
+        // delimiter) only.
+        bool isKeyedTabular = false;
+#if NETSTANDARD2_0
+        if (content.EndsWith(Constants.Colon.ToString()))
+#else
+        if (content.EndsWith(Constants.Colon))
+#endif
+        {
+            isKeyedTabular = true;
+#if NETSTANDARD2_0
+            content = content.Substring(0, content.Length - 1);
+#else
+            content = content[..^1];
+#endif
+        }
+
+        // Spec §6: length is a non-negative integer with no leading zeros;
+        // a single "0" is the only canonical zero form.
+        if (content.Length == 0 || (content.Length > 1 && content[0] == '0'))
+        {
+            throw new InvalidOperationException($"Invalid array length: {seg}");
+        }
+
+        // NumberStyles.None additionally rejects a leading sign, so "-1"
+        // fails here too.
+        if (!int.TryParse(content, NumberStyles.None, CultureInfo.InvariantCulture, out int length))
         {
             throw new InvalidOperationException($"Invalid array length: {seg}");
         }
@@ -231,14 +307,175 @@ internal static class ToonParser
         {
             Length = length,
             Delimiter = delimiter,
-            HasLengthMarker = hasLengthMarker
+            HasLengthMarker = hasLengthMarker,
+            IsKeyedTabular = isKeyedTabular
         };
+    }
+
+    /// <summary>
+    /// Finds the close brace matching the open brace at <paramref name="openBraceIndex"/>,
+    /// tracking nesting depth (and ignoring braces inside quoted key
+    /// segments) so a nested field group's own close brace isn't mistaken
+    /// for the outer group's.
+    /// </summary>
+    /// <returns>The index of the matching close brace, or -1 if unbalanced.</returns>
+    private static int FindMatchingCloseBrace(string content, int openBraceIndex)
+    {
+        int depth = 0;
+        bool inQuotes = false;
+
+        for (int i = openBraceIndex; i < content.Length; i++)
+        {
+            char c = content[i];
+
+            if (c == Constants.DoubleQuote)
+            {
+                inQuotes = !inQuotes;
+                continue;
+            }
+
+            if (inQuotes)
+                continue;
+
+            if (c == Constants.OpenBrace)
+            {
+                depth++;
+            }
+            else if (c == Constants.CloseBrace)
+            {
+                depth--;
+                if (depth == 0)
+                    return i;
+            }
+        }
+
+        return -1;
+    }
+
+    /// <summary>
+    /// Parses a tabular header's field list (spec §9.3/§9.5), including
+    /// any nested field groups (v4.0.0 RFC #46, e.g. "customer{name,country}").
+    /// </summary>
+    private static TabularField[] ParseFieldList(string content, bool legacyCompatibility)
+    {
+        var segments = SplitTopLevelFieldSegments(content, legacyCompatibility);
+        var fields = new TabularField[segments.Length];
+        for (int i = 0; i < segments.Length; i++)
+        {
+            fields[i] = ParseFieldSegment(segments[i], legacyCompatibility);
+        }
+        return fields;
+    }
+
+    /// <summary>
+    /// Parses one field-list segment into a leaf field or a nested field
+    /// group.
+    /// </summary>
+    private static TabularField ParseFieldSegment(string segment, bool legacyCompatibility)
+    {
+        string trimmed = StringUtils.TrimToken(segment, legacyCompatibility);
+        int braceStart = FindUnquotedChar(trimmed, Constants.OpenBrace);
+
+        if (braceStart == -1)
+        {
+            return new TabularField { Name = ParseStringLiteral(trimmed, legacyCompatibility), Children = null };
+        }
+
+        if (trimmed.Length == 0 || trimmed[trimmed.Length - 1] != Constants.CloseBrace)
+        {
+            throw new InvalidOperationException($"Malformed nested field group: {segment}");
+        }
+
+#if NETSTANDARD2_0
+        string namePart = StringUtils.TrimToken(trimmed.Substring(0, braceStart), legacyCompatibility);
+        string innerContent = trimmed.Substring(braceStart + 1, trimmed.Length - braceStart - 2);
+#else
+        string namePart = StringUtils.TrimToken(trimmed[..braceStart], legacyCompatibility);
+        string innerContent = trimmed[(braceStart + 1)..^1];
+#endif
+
+        var children = ParseFieldList(innerContent, legacyCompatibility);
+        if (children.Length == 0)
+        {
+            throw new InvalidOperationException($"Empty nested field group: {segment}");
+        }
+
+        return new TabularField { Name = ParseStringLiteral(namePart, legacyCompatibility), Children = children };
+    }
+
+    /// <summary>
+    /// Splits a field list on top-level commas, respecting quoted
+    /// segments and nested brace groups (so a nested field group's own
+    /// commas don't split it apart).
+    /// </summary>
+    private static string[] SplitTopLevelFieldSegments(string content, bool legacyCompatibility)
+    {
+        var values = new List<string>();
+        var current = new System.Text.StringBuilder();
+        bool inQuotes = false;
+        int braceDepth = 0;
+        int i = 0;
+
+        while (i < content.Length)
+        {
+            char c = content[i];
+
+            if (c == Constants.Backslash && i + 1 < content.Length && inQuotes)
+            {
+                current.Append(c);
+                current.Append(content[i + 1]);
+                i += 2;
+                continue;
+            }
+
+            if (c == Constants.DoubleQuote)
+            {
+                inQuotes = !inQuotes;
+                current.Append(c);
+                i++;
+                continue;
+            }
+
+            if (!inQuotes && c == Constants.OpenBrace)
+            {
+                braceDepth++;
+                current.Append(c);
+                i++;
+                continue;
+            }
+
+            if (!inQuotes && c == Constants.CloseBrace)
+            {
+                braceDepth--;
+                current.Append(c);
+                i++;
+                continue;
+            }
+
+            if (!inQuotes && braceDepth == 0 && c == Constants.Comma)
+            {
+                values.Add(StringUtils.TrimToken(current.ToString(), legacyCompatibility));
+                current.Clear();
+                i++;
+                continue;
+            }
+
+            current.Append(c);
+            i++;
+        }
+
+        if (current.Length > 0 || values.Count > 0)
+        {
+            values.Add(StringUtils.TrimToken(current.ToString(), legacyCompatibility));
+        }
+
+        return values.ToArray();
     }
 
     /// <summary>
     /// Parses delimited values, respecting quoted strings.
     /// </summary>
-    public static string[] ParseDelimitedValues(string input, char delimiter)
+    public static string[] ParseDelimitedValues(string input, char delimiter, bool legacyCompatibility = false)
     {
         var values = new List<string>();
         var current = new System.Text.StringBuilder();
@@ -268,7 +505,7 @@ internal static class ToonParser
 
             if (c == delimiter && !inQuotes)
             {
-                values.Add(current.ToString().Trim());
+                values.Add(StringUtils.TrimToken(current.ToString(), legacyCompatibility));
                 current.Clear();
                 i++;
                 continue;
@@ -281,7 +518,7 @@ internal static class ToonParser
         // Add last value
         if (current.Length > 0 || values.Count > 0)
         {
-            values.Add(current.ToString().Trim());
+            values.Add(StringUtils.TrimToken(current.ToString(), legacyCompatibility));
         }
 
         return values.ToArray();
@@ -298,9 +535,9 @@ internal static class ToonParser
     /// <summary>
     /// Parses a string literal, handling quotes and escaping.
     /// </summary>
-    public static string ParseStringLiteral(string token)
+    public static string ParseStringLiteral(string token, bool legacyCompatibility = false)
     {
-        string trimmed = token.Trim();
+        string trimmed = StringUtils.TrimToken(token, legacyCompatibility);
 
 #if NETSTANDARD2_0
         if (trimmed.StartsWith(Constants.DoubleQuote.ToString()))
@@ -335,7 +572,7 @@ internal static class ToonParser
     /// <summary>
     /// Parses a key token from content.
     /// </summary>
-    public static KeyParseResult ParseKeyToken(string content, int start)
+    public static KeyParseResult ParseKeyToken(string content, int start, bool legacyCompatibility = false)
     {
         if (content[start] == Constants.DoubleQuote)
         {
@@ -343,7 +580,7 @@ internal static class ToonParser
         }
         else
         {
-            return ParseUnquotedKey(content, start);
+            return ParseUnquotedKey(content, start, legacyCompatibility);
         }
     }
 
@@ -364,7 +601,7 @@ internal static class ToonParser
     /// <summary>
     /// Parses an unquoted key.
     /// </summary>
-    private static KeyParseResult ParseUnquotedKey(string content, int start)
+    private static KeyParseResult ParseUnquotedKey(string content, int start, bool legacyCompatibility = false)
     {
         int end = start;
         while (end < content.Length && content[end] != Constants.Colon)
@@ -379,9 +616,9 @@ internal static class ToonParser
         }
 
 #if NETSTANDARD2_0
-    string key = content.Substring(start, end - start).Trim();
+    string key = StringUtils.TrimToken(content.Substring(start, end - start), legacyCompatibility);
 #else
-    string key = content[start..end].Trim();
+    string key = StringUtils.TrimToken(content[start..end], legacyCompatibility);
 #endif
 
         // Skip the colon
@@ -438,6 +675,17 @@ internal static class ToonParser
     /// Checks if content represents an object first field after a hyphen.
     /// </summary>
     public static bool IsObjectFirstFieldAfterHyphen(string content)
+    {
+        return FindUnquotedChar(content, Constants.Colon) != -1;
+    }
+
+    /// <summary>
+    /// Checks whether content contains a colon outside of any quoted
+    /// segment. Used for keyed-tabular entry-row line classification
+    /// (spec §9.5: "every line at entry depth containing an unquoted
+    /// colon is an entry row").
+    /// </summary>
+    public static bool HasUnquotedColon(string content)
     {
         return FindUnquotedChar(content, Constants.Colon) != -1;
     }

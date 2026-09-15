@@ -5,6 +5,24 @@ namespace ToonFormat;
 /// </summary>
 public static class Constants
 {
+    #region Spec version
+
+    /// <summary>
+    /// The TOON format specification version this library conforms to.
+    /// See https://github.com/toon-format/spec/releases/tag/v4.1.1 and
+    /// TOON_V4.md for the v4.0.0-v4.1.1 gap list and compliance status
+    /// that established this baseline (superseding the v3.3.2 baseline
+    /// TOON_V3.md established). One known gap remains at this version:
+    /// the decoder's number tokenization has not been fully audited
+    /// against spec §4's normative number grammar, and out-of-range
+    /// numeric literal handling is unverified — tracked in TOON_V4.md's
+    /// "Number grammar" gap-list row. Update this when that gap closes
+    /// or the implementation moves to a newer spec version.
+    /// </summary>
+    public const string SpecVersion = "4.1.1";
+
+    #endregion
+
     #region List markers
     
     /// <summary>
