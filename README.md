@@ -1,6 +1,5 @@
-# Toon.DotNet - Toon Spec Version 4.1.1
+# Toon.DotNet - Toon Spec Version 3.3.2 & 4.1.1
 ---
-
 
 [![.NET 11.0](https://img.shields.io/badge/.NET-11.0-blue.svg)![.NET 10.0](https://img.shields.io/badge/.NET-10.0-blue.svg)![.NET 9.0](https://img.shields.io/badge/.NET-9.0-blue.svg)![.NET 8.0](https://img.shields.io/badge/.NET-8.0-blue.svg)](https://dotnet.microsoft.com/download)
 [![NetStandard2.0](https://img.shields.io/badge/NetStandard2.0-blue.svg)](https://docs.microsoft.com/en-us/dotnet/standard/net-standard)
@@ -13,7 +12,7 @@
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
 ---
-Token-Oriented Object Notation (TOON) Serializer — a compact, human-readable serialization format designed for passing structured data to Large Language Models with significantly reduced token usage. TOON shines for uniform arrays of objects and readable nested structures. Optimised for .Net 10.0 plus backwards compatible with earlier versions.
+Token-Oriented Object Notation (TOON) Serializer spec V3.3.2 & V4.1.1 — a compact, human-readable serialization format designed for passing structured data to Large Language Models with significantly reduced token usage. TOON shines for uniform arrays of objects and readable nested structures. Optimised for .Net 10.0 plus backwards compatible with earlier versions. Preview 7 .Net 11.0 is currently available but will change in step with the upcoming .Net 11 releases.
 
 - Implements [TOON spec v4.1.1](https://github.com/toon-format/spec/releases/tag/v4.1.1) by default (`EncodeOptions.SpecVersion.V4`), with [v3.3.2](https://github.com/toon-format/spec/releases/tag/v3.3.2) available as an explicit opt-in (`.V3`) for byte-for-byte compatibility with v3-only consumers — see [Spec compliance](#spec-compliance)
 - Token-efficient alternative to JSON for LLM prompts
