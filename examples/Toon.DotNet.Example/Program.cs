@@ -273,6 +273,53 @@ using (var wb = ToonExcel.Decode(keyedTabularToon))
 }
 Console.WriteLine();
 
+// Example 19: Multi-dataset CSV round trip (ToCsvFiles / FromCsvFiles)
+Console.WriteLine("19. Multi-Dataset CSV Round Trip (ToCsvFiles / FromCsvFiles):");
+string multiDatasetToon = Toon.Encode(new
+{
+    sales = new[]
+    {
+        new { id = 1, product = "Widget", amount = 9.99 },
+        new { id = 2, product = "Gadget", amount = 19.99 }
+    },
+    customers = new[]
+    {
+        new { id = 1, name = "Alice" },
+        new { id = 2, name = "Bob" }
+    }
+});
+Console.WriteLine("Original multi-dataset TOON document (a root object, one array per dataset):");
+Console.WriteLine(multiDatasetToon);
+
+string multiDatasetCsvDir = Path.Combine(Path.GetTempPath(), $"toon_example_csv_{Guid.NewGuid()}");
+try
+{
+    // CSV has no native multi-table concept, so ToCsvFiles writes one CSV
+    // file per top-level key — the CSV equivalent of Toon.DotNet.Excel's
+    // one-worksheet-per-dataset convention.
+    var writtenCsvFiles = ToonCsv.ToCsvFiles(multiDatasetToon, multiDatasetCsvDir);
+    Console.WriteLine($"\nWrote {writtenCsvFiles.Count} CSV file(s) to '{multiDatasetCsvDir}':");
+    foreach (var (datasetName, filePath) in writtenCsvFiles)
+        Console.WriteLine($"  {datasetName} -> {Path.GetFileName(filePath)}");
+
+    // FromCsvFiles reads every CSV file back in and combines them into a
+    // single multi-dataset TOON document again, keyed by file name.
+    string roundTrippedToon = ToonCsv.FromCsvFiles(multiDatasetCsvDir);
+    Console.WriteLine("\nRound-tripped back into one TOON document via FromCsvFiles:");
+    Console.WriteLine(roundTrippedToon);
+
+    var roundTrippedElement = Toon.Decode(roundTrippedToon);
+    string roundTrippedProduct = roundTrippedElement.GetProperty("sales")[0].GetProperty("product").GetString()!;
+    string roundTrippedCustomer = roundTrippedElement.GetProperty("customers")[1].GetProperty("name").GetString()!;
+    Console.WriteLine($"\nVerified: sales[0].product = \"{roundTrippedProduct}\", customers[1].name = \"{roundTrippedCustomer}\"");
+}
+finally
+{
+    if (Directory.Exists(multiDatasetCsvDir))
+        Directory.Delete(multiDatasetCsvDir, recursive: true);
+}
+Console.WriteLine();
+
 // ---------------------------------------------------------------------------
 // Optional: save example CSV and Excel files to disk for manual inspection.
 // The test suite's own CSV/Excel temp files are deleted immediately after
@@ -304,6 +351,14 @@ if (string.Equals(saveChoice?.Trim(), "y", StringComparison.OrdinalIgnoreCase))
     using (var wb = ToonExcel.Decode(keyedTabularToon))
         wb.SaveAs(keyedTabularOutputPath);
     Console.WriteLine($"Keyed-tabular-form Excel workbook written to: {keyedTabularOutputPath}");
+
+    // CSV: the Example 19 multi-dataset document, written as one CSV file
+    // per dataset — open the folder to see "sales.csv" and "customers.csv".
+    string multiDatasetCsvOutputDir = Path.Combine(baseDir, "example_multi_dataset_csv");
+    var persistedCsvFiles = ToonCsv.ToCsvFiles(multiDatasetToon, multiDatasetCsvOutputDir);
+    Console.WriteLine($"Multi-dataset CSV files written to:    {multiDatasetCsvOutputDir}");
+    foreach (var filePath in persistedCsvFiles.Values)
+        Console.WriteLine($"  {Path.GetFileName(filePath)}");
 
     Console.WriteLine("\nOpen these files directly to inspect the output.");
 }
